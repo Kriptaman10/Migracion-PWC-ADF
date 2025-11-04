@@ -186,8 +186,16 @@ def print_banner() -> None:
     """Imprime el banner de la aplicación"""
     banner = """
 ===============================================================
-  PowerCenter to Azure Data Factory Migrator v1.0
+  PowerCenter to Azure Data Factory Migrator v2.0
   Desarrollado por: Entix SpA
+
+  Nueva v2.0: Soporte completo para transformaciones avanzadas
+  - Joiner (Inner, Left, Right, Full Outer)
+  - Aggregator (SUM, AVG, COUNT, MIN, MAX)
+  - Lookup (Database, Flat File, SQL Override)
+  - Router (Conditional Split con múltiples salidas)
+  - Sorter (Ordenamiento múltiple)
+  - Update Strategy (INSERT, UPDATE, DELETE)
 ===============================================================
     """
     print(banner)

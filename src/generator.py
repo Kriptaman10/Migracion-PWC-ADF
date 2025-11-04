@@ -135,21 +135,59 @@ class ADFGenerator:
             }
 
             # Agregar propiedades específicas según el tipo
-            if trans['type'] == 'DerivedColumn':
+            trans_type = trans['type']
+
+            if trans_type == 'DerivedColumn':
                 trans_def['columns'] = trans.get('columns', [])
-            elif trans['type'] == 'Filter':
+
+            elif trans_type == 'Filter':
                 trans_def['condition'] = {
                     'value': trans.get('condition', 'true'),
                     'type': 'Expression'
                 }
-            elif trans['type'] == 'Aggregate':
+
+            elif trans_type == 'Aggregate':
                 trans_def['groupBy'] = trans.get('groupBy', [])
                 trans_def['aggregates'] = trans.get('aggregates', [])
-            elif trans['type'] == 'Join':
+                if trans.get('sorted_input'):
+                    trans_def['sortedInput'] = True
+
+            elif trans_type == 'Join':
                 trans_def['joinType'] = trans.get('joinType', 'inner')
-                trans_def['joinCondition'] = trans.get('joinCondition', '')
-            elif trans['type'] == 'Sort':
+                trans_def['joinConditions'] = trans.get('joinConditions', [])
+                trans_def['leftStream'] = trans.get('masterFields', [])
+                trans_def['rightStream'] = trans.get('detailFields', [])
+                if trans.get('sorted_input'):
+                    trans_def['sortedInput'] = True
+                if trans.get('broadcast'):
+                    trans_def['broadcast'] = trans.get('broadcast')
+
+            elif trans_type == 'Sort':
                 trans_def['orderBy'] = trans.get('orderBy', [])
+                trans_def['distinct'] = trans.get('distinct', False)
+
+            elif trans_type == 'ConditionalSplit':
+                trans_def['conditions'] = trans.get('conditions', [])
+                trans_def['defaultStream'] = trans.get('defaultStream')
+
+            elif trans_type == 'Lookup':
+                trans_def['lookupDataset'] = trans.get('lookupDataset')
+                trans_def['lookupConditions'] = trans.get('lookupConditions', [])
+                trans_def['returnFields'] = trans.get('returnFields', [])
+                trans_def['cacheMode'] = trans.get('cacheMode', 'static')
+                if trans.get('sqlOverride'):
+                    trans_def['sqlOverride'] = trans.get('sqlOverride')
+                if trans.get('sourceType') == 'DelimitedText':
+                    trans_def['sourceType'] = 'DelimitedText'
+                    trans_def['flatFileConfig'] = trans.get('flatFileConfig', {})
+
+            elif trans_type == 'AlterRow':
+                trans_def['action'] = trans.get('action', 'insert')
+                if trans.get('condition'):
+                    trans_def['condition'] = {
+                        'value': trans.get('condition'),
+                        'type': 'Expression'
+                    }
 
             transformations.append(trans_def)
 

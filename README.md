@@ -1,4 +1,4 @@
-# 🔄 PowerCenter to Azure Data Factory Migrator
+# 🔄 Migrador de PowerCenter a Azure Data Factory 
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -10,7 +10,7 @@ Herramienta CLI automatizada para migrar mappings de Informatica PowerCenter a A
 
 ## 📋 Descripción
 
-**PowerCenter to Azure Data Factory Migrator** es una herramienta de línea de comandos desarrollada para automatizar el proceso de migración de pipelines ETL desde Informatica PowerCenter (on-premise) hacia Azure Data Factory (cloud).
+**Migrador de PowerCenter a Azure Data Factory** es una herramienta de línea de comandos desarrollada para automatizar el proceso de migración de pipelines ETL desde Informatica PowerCenter (on-premise) hacia Azure Data Factory (cloud).
 
 ### El Problema
 

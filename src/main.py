@@ -18,6 +18,7 @@ from rich import print as rprint
 from .parser import parse_powercenter_xml
 from .translator import PowerCenterToADFTranslator
 from .generator import ADFGenerator
+from .validator import MappingValidator
 from .utils import (
     setup_logging,
     validate_file_path,
@@ -95,7 +96,13 @@ Para más información: https://github.com/entix/powercenter-to-adf
     parser.add_argument(
         '--version',
         action='version',
-        version='%(prog)s 1.0.0'
+        version='%(prog)s 2.0.0'
+    )
+
+    parser.add_argument(
+        '--skip-validation',
+        action='store_true',
+        help='Omitir validaciones pre-migración'
     )
 
     return parser.parse_args()
@@ -165,7 +172,8 @@ def display_summary(
 def run_migration(
     input_file: str,
     output_dir: str,
-    validate_only: bool = False
+    validate_only: bool = False,
+    skip_validation: bool = False
 ) -> bool:
     """
     Ejecuta el proceso completo de migración.
@@ -174,6 +182,7 @@ def run_migration(
         input_file: Ruta al archivo XML de PowerCenter
         output_dir: Directorio de salida
         validate_only: Si True, solo valida sin generar archivos
+        skip_validation: Si True, omite validaciones pre-migración
 
     Returns:
         True si la migración fue exitosa, False en caso contrario
@@ -191,6 +200,29 @@ def run_migration(
         print(f"  - Fuentes: {len(metadata.sources)}")
         print(f"  - Transformaciones: {len(metadata.transformations)}")
         print(f"  - Destinos: {len(metadata.targets)}")
+
+        # Validar mapping (v2.0)
+        if not skip_validation:
+            print("\nValidando mapping...")
+            validator = MappingValidator()
+            errors, warnings = validator.validate(metadata)
+
+            if errors:
+                print(f"[ERROR] Validación falló con {len(errors)} errores:")
+                for error in errors[:5]:
+                    print(f"  - {error}")
+                if len(errors) > 5:
+                    print(f"  ... y {len(errors) - 5} más")
+                return False
+
+            if warnings:
+                print(f"[WARNING] {len(warnings)} advertencias encontradas:")
+                for warning in warnings[:3]:
+                    print(f"  - {warning}")
+                if len(warnings) > 3:
+                    print(f"  ... y {len(warnings) - 3} más")
+
+            print(f"[OK] Validación completada")
 
         if validate_only:
             print("\n[OK] Validacion exitosa")
@@ -285,7 +317,8 @@ def main() -> int:
     success = run_migration(
         args.input_file,
         args.output,
-        args.validate_only
+        args.validate_only,
+        args.skip_validation
     )
 
     if success:

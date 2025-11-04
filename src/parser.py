@@ -92,7 +92,9 @@ class PowerCenterXMLParser:
         'Joiner': 'joiner',
         'Sorter': 'sorter',
         'Router': 'router',
-        'Lookup': 'lookup'
+        'Lookup': 'lookup',
+        'Lookup Procedure': 'lookup',
+        'Update Strategy': 'update_strategy'
     }
 
     def __init__(self):
@@ -213,10 +215,14 @@ class PowerCenterXMLParser:
 
             transformations.append(transformation)
 
-            # Log si la transformación no es soportada
-            if trans_type not in self.SUPPORTED_TRANSFORMATIONS:
+            # Log si la transformación no es soportada (solo para transformaciones realmente no soportadas)
+            unsupported_transformations = {
+                'Sequence Generator', 'Normalizer', 'Rank', 'Union',
+                'XML Source Qualifier', 'XML Target', 'Custom Transformation'
+            }
+            if trans_type in unsupported_transformations:
                 logger.warning(
-                    f"Transformación '{trans_type}' en '{trans_name}' no está soportada"
+                    f"Transformación '{trans_type}' en '{trans_name}' no está soportada en v2.0"
                 )
 
         return transformations
@@ -245,30 +251,353 @@ class PowerCenterXMLParser:
         """Extrae propiedades específicas de cada tipo de transformación"""
         properties = {}
 
+        # Delegar a métodos especializados para cada tipo
         if trans_type == 'Aggregator':
-            # Extraer group by fields
-            properties['group_by_fields'] = []
-            for field in trans_elem.findall('.//TRANSFORMFIELD[@PORTTYPE="INPUT/OUTPUT"]'):
-                if field.get('GROUPBY') == 'YES':
-                    properties['group_by_fields'].append(field.get('NAME'))
-
+            properties = self._parse_aggregator_properties(trans_elem)
         elif trans_type == 'Joiner':
-            # Extraer tipo de join
-            properties['join_type'] = trans_elem.get('JOINTYPE', 'Normal')
-            properties['join_condition'] = trans_elem.get('JOINCONDITION', '')
-
+            properties = self._parse_joiner_properties(trans_elem)
         elif trans_type == 'Filter':
-            # Extraer condición de filtro
-            properties['filter_condition'] = trans_elem.get('FILTERCONDITION', '')
-
+            properties = self._parse_filter_properties(trans_elem)
         elif trans_type == 'Sorter':
-            # Extraer campos de ordenamiento
-            properties['sort_fields'] = []
-            for field in trans_elem.findall('.//TRANSFORMFIELD[@SORTKEY]'):
-                properties['sort_fields'].append({
+            properties = self._parse_sorter_properties(trans_elem)
+        elif trans_type == 'Router':
+            properties = self._parse_router_properties(trans_elem)
+        elif trans_type == 'Lookup Procedure':
+            properties = self._parse_lookup_properties(trans_elem)
+        elif trans_type == 'Update Strategy':
+            properties = self._parse_update_strategy_properties(trans_elem)
+        elif trans_type == 'Source Qualifier':
+            properties = self._parse_source_qualifier_properties(trans_elem)
+
+        return properties
+
+    def _parse_sorter_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades del Sorter Transformation.
+
+        Extrae:
+        - Sort keys con dirección (ASC/DESC)
+        - Distinct flag
+        - Case sensitive flag
+        - Null treated low
+        """
+        properties = {
+            'sort_keys': [],
+            'distinct': False,
+            'case_sensitive': True,
+            'null_treated_low': False
+        }
+
+        # Extraer campos con ISSORTKEY="YES"
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            if field.get('ISSORTKEY') == 'YES':
+                properties['sort_keys'].append({
                     'name': field.get('NAME'),
-                    'order': field.get('SORTORDER', 'ASC')
+                    'direction': field.get('SORTDIRECTION', 'ASCENDING'),
+                    'order': int(field.get('SORTORDER', 0))
                 })
+
+        # Ordenar por SORTORDER
+        properties['sort_keys'].sort(key=lambda x: x['order'])
+
+        # Extraer atributos de tabla
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            attr_name = attr.get('NAME')
+            attr_value = attr.get('VALUE', '')
+
+            if attr_name == 'Distinct':
+                properties['distinct'] = attr_value.upper() == 'YES'
+            elif attr_name == 'Case Sensitive':
+                properties['case_sensitive'] = attr_value.upper() == 'YES'
+            elif attr_name == 'Null Treated Low':
+                properties['null_treated_low'] = attr_value.upper() == 'YES'
+
+        return properties
+
+    def _parse_update_strategy_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades del Update Strategy Transformation.
+
+        Extrae:
+        - Update strategy expression (DD_INSERT, DD_UPDATE, DD_DELETE, DD_REJECT)
+        - Forward rejected rows flag
+        """
+        properties = {
+            'strategy': 'DD_INSERT',  # Default
+            'strategy_expression': None,
+            'forward_rejected_rows': False
+        }
+
+        # Extraer expresión de estrategia
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            if field.get('PORTTYPE') == 'OUTPUT':
+                strategy_expr = field.get('EXPRESSION')
+                if strategy_expr:
+                    properties['strategy_expression'] = strategy_expr
+                    # Detectar tipo de estrategia
+                    if 'DD_INSERT' in strategy_expr:
+                        properties['strategy'] = 'DD_INSERT'
+                    elif 'DD_UPDATE' in strategy_expr:
+                        properties['strategy'] = 'DD_UPDATE'
+                    elif 'DD_DELETE' in strategy_expr:
+                        properties['strategy'] = 'DD_DELETE'
+                    elif 'DD_REJECT' in strategy_expr:
+                        properties['strategy'] = 'DD_REJECT'
+
+        # Extraer atributos
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            attr_name = attr.get('NAME')
+            attr_value = attr.get('VALUE', '')
+
+            if attr_name == 'Forward Rejected Rows':
+                properties['forward_rejected_rows'] = attr_value.upper() == 'YES'
+            elif attr_name == 'Update Strategy Expression':
+                properties['strategy_expression'] = attr_value
+
+        return properties
+
+    def _parse_aggregator_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades mejoradas del Aggregator Transformation.
+
+        Extrae:
+        - Group by fields (EXPRESSIONTYPE="GROUPBY")
+        - Aggregate expressions (SUM, AVG, COUNT, etc.)
+        - Sorted input flag
+        """
+        properties = {
+            'group_by_fields': [],
+            'aggregate_expressions': [],
+            'sorted_input': False
+        }
+
+        # Extraer campos
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            expression_type = field.get('EXPRESSIONTYPE', '')
+            field_name = field.get('NAME')
+            port_type = field.get('PORTTYPE', '')
+
+            if expression_type == 'GROUPBY':
+                properties['group_by_fields'].append(field_name)
+            elif expression_type == 'GENERAL' and field.get('EXPRESSION'):
+                # Campo con expresión de agregación
+                properties['aggregate_expressions'].append({
+                    'name': field_name,
+                    'expression': field.get('EXPRESSION'),
+                    'datatype': field.get('DATATYPE', 'string')
+                })
+
+        # Extraer atributos
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            if attr.get('NAME') == 'Sorted Input':
+                properties['sorted_input'] = attr.get('VALUE', 'NO').upper() == 'YES'
+
+        return properties
+
+    def _parse_joiner_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades mejoradas del Joiner Transformation.
+
+        Extrae:
+        - Join condition (puede ser múltiple)
+        - Join type (Normal, Master Outer, Detail Outer, Full Outer)
+        - Master fields (PORTTYPE="INPUT/OUTPUT/MASTER")
+        - Detail fields (PORTTYPE="INPUT/OUTPUT")
+        - Sorted input flag
+        """
+        properties = {
+            'join_type': 'Normal Join',
+            'join_condition': '',
+            'master_fields': [],
+            'detail_fields': [],
+            'sorted_input': False,
+            'master_sort_order': 'Auto'
+        }
+
+        # Extraer campos master y detail
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            port_type = field.get('PORTTYPE', '')
+            field_name = field.get('NAME')
+
+            if 'MASTER' in port_type:
+                properties['master_fields'].append(field_name)
+            elif port_type in ('INPUT/OUTPUT', 'OUTPUT'):
+                properties['detail_fields'].append(field_name)
+
+        # Extraer atributos de tabla
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            attr_name = attr.get('NAME')
+            attr_value = attr.get('VALUE', '')
+
+            if attr_name == 'Join Condition':
+                properties['join_condition'] = attr_value
+            elif attr_name == 'Join Type':
+                properties['join_type'] = attr_value
+            elif attr_name == 'Sorted Input':
+                properties['sorted_input'] = attr_value.upper() == 'YES'
+            elif attr_name == 'Master Sort Order':
+                properties['master_sort_order'] = attr_value
+
+        return properties
+
+    def _parse_lookup_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades del Lookup Transformation.
+
+        Extrae:
+        - Lookup table name
+        - Source type (Database, Flat File)
+        - Lookup condition
+        - SQL Override
+        - Return fields (PORTTYPE="LOOKUP/OUTPUT")
+        - Caching enabled
+        - Multiple match policy
+        """
+        properties = {
+            'lookup_table': None,
+            'source_type': 'Database',
+            'lookup_condition': '',
+            'sql_override': None,
+            'return_fields': [],
+            'cache_enabled': True,
+            'multiple_match_policy': 'Use Any Value',
+            'lookup_fields': []
+        }
+
+        # Extraer campos lookup
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            port_type = field.get('PORTTYPE', '')
+            field_name = field.get('NAME')
+
+            if 'LOOKUP' in port_type and 'OUTPUT' in port_type:
+                properties['return_fields'].append({
+                    'name': field_name,
+                    'datatype': field.get('DATATYPE', 'string')
+                })
+            elif 'LOOKUP' in port_type:
+                properties['lookup_fields'].append(field_name)
+
+        # Extraer atributos de tabla
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            attr_name = attr.get('NAME')
+            attr_value = attr.get('VALUE', '')
+
+            if attr_name == 'Lookup table name':
+                properties['lookup_table'] = attr_value
+            elif attr_name == 'Source Type':
+                properties['source_type'] = attr_value
+            elif attr_name == 'Lookup condition':
+                properties['lookup_condition'] = attr_value
+            elif attr_name == 'Lookup Sql Override':
+                properties['sql_override'] = attr_value
+            elif attr_name == 'Lookup caching enabled':
+                properties['cache_enabled'] = attr_value.upper() == 'YES'
+            elif attr_name == 'Lookup policy on multiple match':
+                properties['multiple_match_policy'] = attr_value
+
+        # Extraer información de Flat File si aplica
+        flatfile_elem = trans_elem.find('.//FLATFILE')
+        if flatfile_elem is not None:
+            properties['flat_file'] = {
+                'delimited': flatfile_elem.get('DELIMITED') == 'YES',
+                'delimiters': flatfile_elem.get('DELIMITERS', ','),
+                'skip_rows': int(flatfile_elem.get('SKIPROWS', 0))
+            }
+
+        return properties
+
+    def _parse_router_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades del Router Transformation.
+
+        Extrae:
+        - Output groups con sus expresiones
+        - Default group
+        - Campos por grupo con REF_FIELD
+        """
+        properties = {
+            'groups': [],
+            'default_group': None
+        }
+
+        # Extraer grupos
+        for group in trans_elem.findall('.//GROUP'):
+            group_name = group.get('NAME')
+            group_type = group.get('TYPE', '')
+            group_expression = group.get('EXPRESSION')
+
+            if 'DEFAULT' in group_type:
+                properties['default_group'] = group_name
+                properties['groups'].append({
+                    'name': group_name,
+                    'type': 'default',
+                    'expression': None,
+                    'fields': []
+                })
+            elif 'OUTPUT' in group_type:
+                group_info = {
+                    'name': group_name,
+                    'type': 'output',
+                    'expression': group_expression,
+                    'fields': []
+                }
+                properties['groups'].append(group_info)
+
+        # Extraer campos por grupo
+        for field in trans_elem.findall('.//TRANSFORMFIELD'):
+            field_group = field.get('GROUP')
+            field_name = field.get('NAME')
+            ref_field = field.get('REF_FIELD')
+            port_type = field.get('PORTTYPE', '')
+
+            if field_group and 'OUTPUT' in port_type:
+                # Buscar el grupo correspondiente
+                for group in properties['groups']:
+                    if group['name'] == field_group:
+                        group['fields'].append({
+                            'name': field_name,
+                            'ref_field': ref_field,
+                            'datatype': field.get('DATATYPE')
+                        })
+                        break
+
+        return properties
+
+    def _parse_filter_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """Parsea propiedades del Filter Transformation"""
+        properties = {'filter_condition': ''}
+
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            if attr.get('NAME') == 'Filter Condition':
+                properties['filter_condition'] = attr.get('VALUE', '')
+
+        return properties
+
+    def _parse_source_qualifier_properties(self, trans_elem: etree._Element) -> Dict[str, Any]:
+        """
+        Parsea propiedades del Source Qualifier Transformation.
+
+        Extrae:
+        - Source filter
+        - SQL Override
+        - User defined join
+        """
+        properties = {
+            'source_filter': None,
+            'sql_override': None,
+            'user_defined_join': None
+        }
+
+        for attr in trans_elem.findall('.//TABLEATTRIBUTE'):
+            attr_name = attr.get('NAME')
+            attr_value = attr.get('VALUE', '')
+
+            if attr_name == 'Source Filter':
+                properties['source_filter'] = attr_value
+            elif attr_name == 'Sql Query':
+                properties['sql_override'] = attr_value
+            elif attr_name == 'User Defined Join':
+                properties['user_defined_join'] = attr_value
 
         return properties
 
