@@ -1,0 +1,49 @@
+# Configuration file for PowerCenter to ADF Migrator v2.5
+
+app:
+  name: "PowerCenter to Azure Data Factory Migrator"
+  version: "2.5.0"
+  max_file_size_mb: 50
+  temp_folder: "temp"
+
+migration:
+  # Pipeline settings
+  default_pipeline_prefix: "pl_"
+  default_dataflow_prefix: "df_"
+  default_dataset_prefix: "ds_"
+  pipeline_folder: "Migrations"
+
+  # Connection settings
+  oracle_linked_service: "ls_Oracle_OnPrem"
+  sql_linked_service: "ls_AzureSQL_Database"
+  blob_linked_service: "ls_AzureBlob_Storage"
+  integration_runtime: "AutoResolveIntegrationRuntime"
+
+  # Advanced settings
+  enable_logging: true
+  enable_error_handling: true
+  enable_staging: false
+  enable_partitioning: false
+  max_parallelism: 4
+  data_flow_compute: "General Purpose"
+
+  # Naming conventions
+  source_dataset_pattern: "{prefix}{source_name}"
+  target_dataset_pattern: "{prefix}{target_name}"
+  transformation_prefix: ""
+  use_original_names: true
+
+performance:
+  max_parallelism: 10
+  default_parallelism: 4
+  enable_caching: true
+
+export:
+  include_pdf: false  # PDF export requiere dependencias adicionales
+  include_datasets: true
+  zip_compression_level: 9
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
