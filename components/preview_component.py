@@ -434,26 +434,26 @@ def show_detailed_comparison(transform_name):
         comparison_data.append({
             "Attribute": "Join Type",
             "PowerCenter": pc_props.get('join_type', 'N/A'),
-            "Azure Data Factory": adf_props.get('joinType', 'N/A')
+            "Azure Data Factory": adf_transform.get('joinType', 'N/A')
         })
 
     elif pc_type == 'Aggregator':
         comparison_data.append({
             "Attribute": "Group By Fields",
             "PowerCenter": ", ".join(pc_props.get('group_by', [])) or "N/A",
-            "Azure Data Factory": ", ".join(adf_props.get('groupBy', [])) or "N/A"
+            "Azure Data Factory": ", ".join(adf_transform.get('groupBy', [])) or "N/A"
         })
         comparison_data.append({
             "Attribute": "Aggregation Count",
             "PowerCenter": str(len(pc_props.get('aggregates', []))),
-            "Azure Data Factory": str(len(adf_props.get('aggregates', [])))
+            "Azure Data Factory": str(len(adf_transform.get('aggregates', [])))
         })
 
     elif pc_type == 'Lookup':
         comparison_data.append({
             "Attribute": "Lookup Source",
             "PowerCenter": pc_props.get('lookup_table', 'N/A'),
-            "Azure Data Factory": adf_props.get('lookupDataset', 'N/A')
+            "Azure Data Factory": adf_transform.get('lookupDataset', 'N/A')
         })
 
     # Mostrar tabla
