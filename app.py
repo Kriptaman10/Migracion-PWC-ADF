@@ -16,14 +16,15 @@ import json
 import time
 
 # Agregar src y components al path
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
 sys.path.insert(0, str(Path(__file__).parent / 'components'))
 
 # Importar módulos del core (v2.0)
-from parser import PowerCenterParser
-from translator import PowerCenterTranslator
-from generator import ADFGenerator
-from validator import MappingValidator
+from src import (
+    PowerCenterParser,
+    PowerCenterTranslator,
+    ADFGenerator,
+    MappingValidator
+)
 
 # Importar componentes de la UI
 from upload_component import render_upload_tab

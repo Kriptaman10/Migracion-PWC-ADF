@@ -8,13 +8,9 @@ Author: Benjamín Riquelme
 """
 
 import streamlit as st
-import sys
-from pathlib import Path
 
 # Importar módulos del core
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from parser import PowerCenterParser
-from translator import PowerCenterTranslator
+from src import PowerCenterParser, PowerCenterTranslator
 
 
 def render_preview_tab():

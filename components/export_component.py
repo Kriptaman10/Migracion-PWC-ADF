@@ -10,15 +10,12 @@ Author: Benjamín Riquelme
 import streamlit as st
 import json
 import time
-import sys
 from pathlib import Path
 from io import BytesIO
 import zipfile
 
 # Importar módulos del core
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from generator import ADFGenerator
-from validator import MappingValidator
+from src import ADFGenerator, MappingValidator
 
 
 def render_export_tab():
