@@ -88,7 +88,7 @@ def render_migration_metrics():
     with col1:
         st.metric(
             label="📦 Transformations",
-            value=len(st.session_state['parsed_data'].get('transformations', [])),
+            value=len(st.session_state['parsed_data'].transformations),
             help="Total transformations migrated"
         )
 

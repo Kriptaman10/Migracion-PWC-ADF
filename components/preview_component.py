@@ -63,22 +63,24 @@ def render_preview_tab():
     # =====================================================
     col_summary1, col_summary2, col_summary3 = st.columns(3)
 
+    parsed_data = st.session_state['parsed_data']
+
     with col_summary1:
         st.metric(
             "📦 Transformations",
-            len(st.session_state['parsed_data'].get('transformations', []))
+            len(parsed_data.transformations)
         )
 
     with col_summary2:
         st.metric(
             "📥 Sources",
-            len(st.session_state['parsed_data'].get('sources', []))
+            len(parsed_data.sources)
         )
 
     with col_summary3:
         st.metric(
             "📤 Targets",
-            len(st.session_state['parsed_data'].get('targets', []))
+            len(parsed_data.targets)
         )
 
     st.markdown("---")
@@ -88,13 +90,13 @@ def render_preview_tab():
     # =====================================================
     st.subheader("🎯 Select Transformation to Compare")
 
-    transformations = st.session_state['parsed_data'].get('transformations', [])
+    transformations = parsed_data.transformations
 
     if not transformations:
         st.warning("⚠️ No transformations found in mapping")
         st.stop()
 
-    transform_names = [f"{t.get('name', 'Unknown')} ({t.get('type', 'Unknown')})" for t in transformations]
+    transform_names = [f"{t.name} ({t.type})" for t in transformations]
 
     selected_transform_str = st.selectbox(
         "Choose a transformation:",
@@ -138,7 +140,7 @@ def render_pc_transformation(transform_name):
     """Renderiza detalles de transformación de PowerCenter"""
     pc_data = st.session_state['parsed_data']
     transform = next(
-        (t for t in pc_data.get('transformations', []) if t.get('name') == transform_name),
+        (t for t in pc_data.transformations if t.name == transform_name),
         None
     )
 
@@ -146,14 +148,15 @@ def render_pc_transformation(transform_name):
         st.error("Transformation not found")
         return
 
-    st.markdown(f"**Type:** `{transform.get('type', 'Unknown')}`")
-    st.markdown(f"**Name:** `{transform.get('name', 'Unknown')}`")
+    st.markdown(f"**Type:** `{transform.type}`")
+    st.markdown(f"**Name:** `{transform.name}`")
 
-    if transform.get('description'):
-        st.info(f"📝 {transform['description']}")
+    if transform.description:
+        st.info(f"📝 {transform.description}")
 
     # Detalles específicos por tipo
-    transform_type = transform.get('type', '')
+    transform_type = transform.type
+    props = transform.properties
 
     if transform_type == 'Source Qualifier':
         render_pc_source_qualifier(transform)
@@ -179,61 +182,66 @@ def render_pc_transformation(transform_name):
 
 def render_pc_source_qualifier(transform):
     """Renderiza Source Qualifier de PC"""
-    if transform.get('source_filter'):
-        st.code(f"WHERE {transform['source_filter']}", language='sql')
-    if transform.get('sql_override'):
+    props = transform.properties
+    if props.get('source_filter'):
+        st.code(f"WHERE {props['source_filter']}", language='sql')
+    if props.get('sql_override'):
         with st.expander("View SQL Override"):
-            st.code(transform['sql_override'], language='sql')
+            st.code(props['sql_override'], language='sql')
 
 
 def render_pc_joiner(transform):
     """Renderiza Joiner de PC"""
-    st.markdown(f"**Join Type:** `{transform.get('join_type', 'N/A')}`")
+    props = transform.properties
+    st.markdown(f"**Join Type:** `{props.get('join_type', 'N/A')}`")
     st.markdown("**Join Condition:**")
-    st.code(transform.get('join_condition', 'N/A'), language='sql')
+    st.code(props.get('join_condition', 'N/A'), language='sql')
 
     with st.expander("View Fields"):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Master Fields:**")
-            for field in transform.get('master_fields', []):
+            for field in props.get('master_fields', []):
                 st.text(f"  • {field}")
         with col2:
             st.markdown("**Detail Fields:**")
-            for field in transform.get('detail_fields', []):
+            for field in props.get('detail_fields', []):
                 st.text(f"  • {field}")
 
 
 def render_pc_aggregator(transform):
     """Renderiza Aggregator de PC"""
+    props = transform.properties
     st.markdown("**Group By:**")
-    for field in transform.get('group_by', []):
+    for field in props.get('group_by', []):
         st.code(field, language='sql')
 
     st.markdown("**Aggregations:**")
-    for agg in transform.get('aggregates', [])[:10]:
+    for agg in props.get('aggregates', [])[:10]:
         st.code(f"{agg.get('name', 'N/A')} = {agg.get('expression', 'N/A')}", language='sql')
 
-    if len(transform.get('aggregates', [])) > 10:
-        st.info(f"... and {len(transform['aggregates']) - 10} more aggregations")
+    if len(props.get('aggregates', [])) > 10:
+        st.info(f"... and {len(props['aggregates']) - 10} more aggregations")
 
 
 def render_pc_lookup(transform):
     """Renderiza Lookup de PC"""
-    st.markdown(f"**Lookup Table:** `{transform.get('lookup_table', 'N/A')}`")
-    st.markdown(f"**Source Type:** `{transform.get('source_type', 'Database')}`")
+    props = transform.properties
+    st.markdown(f"**Lookup Table:** `{props.get('lookup_table', 'N/A')}`")
+    st.markdown(f"**Source Type:** `{props.get('source_type', 'Database')}`")
     st.markdown("**Lookup Condition:**")
-    st.code(transform.get('lookup_condition', 'N/A'), language='sql')
+    st.code(props.get('lookup_condition', 'N/A'), language='sql')
 
-    if transform.get('sql_override'):
+    if props.get('sql_override'):
         with st.expander("View SQL Override"):
-            st.code(transform['sql_override'], language='sql')
+            st.code(props['sql_override'], language='sql')
 
 
 def render_pc_router(transform):
     """Renderiza Router de PC"""
+    props = transform.properties
     st.markdown("**Output Groups:**")
-    for group in transform.get('groups', []):
+    for group in props.get('groups', []):
         if group.get('expression'):
             st.code(f"{group.get('name', 'N/A')}: {group['expression']}", language='sql')
         else:
@@ -242,15 +250,17 @@ def render_pc_router(transform):
 
 def render_pc_sorter(transform):
     """Renderiza Sorter de PC"""
+    props = transform.properties
     st.markdown("**Sort Keys:**")
-    for key in transform.get('sort_keys', []):
+    for key in props.get('sort_keys', []):
         st.text(f"  • {key.get('name', 'N/A')} ({key.get('direction', 'ASC')})")
 
 
 def render_pc_expression(transform):
     """Renderiza Expression de PC"""
+    props = transform.properties
     st.markdown("**Derived Columns:**")
-    expressions = transform.get('expressions', [])
+    expressions = props.get('expressions', [])
     for expr in expressions[:5]:
         st.code(f"{expr.get('name', 'N/A')} = {expr.get('expression', 'N/A')}", language='sql')
 
@@ -262,8 +272,9 @@ def render_pc_expression(transform):
 
 def render_pc_filter(transform):
     """Renderiza Filter de PC"""
+    props = transform.properties
     st.markdown("**Filter Condition:**")
-    st.code(transform.get('filter_condition', 'N/A'), language='sql')
+    st.code(props.get('filter_condition', 'N/A'), language='sql')
 
 
 def render_adf_transformation(transform_name):
@@ -279,15 +290,15 @@ def render_adf_transformation(transform_name):
         st.warning("No ADF equivalent found")
         return
 
-    st.markdown(f"**Type:** `{transform.get('type', 'Unknown')}`")
-    st.markdown(f"**Name:** `{transform.get('name', 'Unknown')}`")
+    st.markdown(f"**Type:** `{props.get('type', 'Unknown')}`")
+    st.markdown(f"**Name:** `{props.get('name', 'Unknown')}`")
 
     # Renderizar JSON de la transformación
     with st.expander("📄 View JSON Configuration"):
         st.json(transform)
 
     # Detalles específicos por tipo
-    transform_type = transform.get('type', '')
+    transform_type = props.get('type', '')
 
     if transform_type == 'source':
         render_adf_source(transform)
@@ -309,16 +320,16 @@ def render_adf_transformation(transform_name):
 
 def render_adf_source(transform):
     """Renderiza Source de ADF"""
-    st.markdown(f"**Dataset:** `{transform.get('dataset', 'N/A')}`")
-    if transform.get('sourceFilter'):
-        st.code(transform['sourceFilter'], language='sql')
+    st.markdown(f"**Dataset:** `{props.get('dataset', 'N/A')}`")
+    if props.get('sourceFilter'):
+        st.code(props['sourceFilter'], language='sql')
 
 
 def render_adf_join(transform):
     """Renderiza Join de ADF"""
-    st.markdown(f"**Join Type:** `{transform.get('joinType', 'N/A')}`")
+    st.markdown(f"**Join Type:** `{props.get('joinType', 'N/A')}`")
     st.markdown("**Join Conditions:**")
-    for cond in transform.get('joinConditions', []):
+    for cond in props.get('joinConditions', []):
         st.code(
             f"{cond.get('leftColumn', 'N/A')} {cond.get('operator', '==')} {cond.get('rightColumn', 'N/A')}",
             language='python'
@@ -328,19 +339,19 @@ def render_adf_join(transform):
 def render_adf_aggregate(transform):
     """Renderiza Aggregate de ADF"""
     st.markdown("**Group By:**")
-    for field in transform.get('groupBy', []):
+    for field in props.get('groupBy', []):
         st.code(field, language='python')
 
     st.markdown("**Aggregates:**")
-    for agg in transform.get('aggregates', []):
+    for agg in props.get('aggregates', []):
         st.code(f"{agg.get('name', 'N/A')} = {agg.get('expression', 'N/A')}", language='python')
 
 
 def render_adf_lookup(transform):
     """Renderiza Lookup de ADF"""
-    st.markdown(f"**Dataset:** `{transform.get('lookupDataset', 'N/A')}`")
+    st.markdown(f"**Dataset:** `{props.get('lookupDataset', 'N/A')}`")
     st.markdown("**Lookup Conditions:**")
-    for cond in transform.get('lookupConditions', []):
+    for cond in props.get('lookupConditions', []):
         st.code(
             f"{cond.get('leftColumn', 'N/A')} {cond.get('operator', '==')} {cond.get('rightColumn', 'N/A')}",
             language='python'
@@ -350,21 +361,21 @@ def render_adf_lookup(transform):
 def render_adf_conditional_split(transform):
     """Renderiza Conditional Split de ADF"""
     st.markdown("**Conditions:**")
-    for cond in transform.get('conditions', []):
+    for cond in props.get('conditions', []):
         st.code(f"{cond.get('name', 'N/A')}: {cond.get('expression', 'N/A')}", language='python')
 
 
 def render_adf_sort(transform):
     """Renderiza Sort de ADF"""
     st.markdown("**Sort Columns:**")
-    for col in transform.get('sortColumns', []):
+    for col in props.get('sortColumns', []):
         st.text(f"  • {col.get('name', 'N/A')} ({col.get('order', 'asc')})")
 
 
 def render_adf_derived_column(transform):
     """Renderiza Derived Column de ADF"""
     st.markdown("**Columns:**")
-    columns = transform.get('columns', [])
+    columns = props.get('columns', [])
     for col in columns[:5]:
         st.code(f"{col.get('name', 'N/A')} = {col.get('expression', 'N/A')}", language='python')
 
@@ -375,7 +386,7 @@ def render_adf_derived_column(transform):
 def render_adf_filter(transform):
     """Renderiza Filter de ADF"""
     st.markdown("**Filter Expression:**")
-    st.code(transform.get('condition', 'N/A'), language='python')
+    st.code(props.get('condition', 'N/A'), language='python')
 
 
 def show_detailed_comparison(transform_name):
@@ -384,7 +395,7 @@ def show_detailed_comparison(transform_name):
     adf_data = st.session_state['adf_data']
 
     pc_transform = next(
-        (t for t in pc_data.get('transformations', []) if t.get('name') == transform_name),
+        (t for t in pc_data.transformations if t.name == transform_name),
         None
     )
 
@@ -404,51 +415,52 @@ def show_detailed_comparison(transform_name):
     # Tipo
     comparison_data.append({
         "Attribute": "Type",
-        "PowerCenter": pc_transform.get('type', 'N/A'),
+        "PowerCenter": pc_transform.type,
         "Azure Data Factory": adf_transform.get('type', 'N/A')
     })
 
     # Nombre
     comparison_data.append({
         "Attribute": "Name",
-        "PowerCenter": pc_transform.get('name', 'N/A'),
+        "PowerCenter": pc_transform.name,
         "Azure Data Factory": adf_transform.get('name', 'N/A')
     })
 
     # Atributos específicos según tipo
-    pc_type = pc_transform.get('type', '')
+    pc_type = pc_transform.type
+    pc_props = pc_transform.properties
 
     if pc_type == 'Joiner':
         comparison_data.append({
             "Attribute": "Join Type",
-            "PowerCenter": pc_transform.get('join_type', 'N/A'),
-            "Azure Data Factory": adf_transform.get('joinType', 'N/A')
+            "PowerCenter": pc_props.get('join_type', 'N/A'),
+            "Azure Data Factory": adf_props.get('joinType', 'N/A')
         })
 
     elif pc_type == 'Aggregator':
         comparison_data.append({
             "Attribute": "Group By Fields",
-            "PowerCenter": ", ".join(pc_transform.get('group_by', [])) or "N/A",
-            "Azure Data Factory": ", ".join(adf_transform.get('groupBy', [])) or "N/A"
+            "PowerCenter": ", ".join(pc_props.get('group_by', [])) or "N/A",
+            "Azure Data Factory": ", ".join(adf_props.get('groupBy', [])) or "N/A"
         })
         comparison_data.append({
             "Attribute": "Aggregation Count",
-            "PowerCenter": str(len(pc_transform.get('aggregates', []))),
-            "Azure Data Factory": str(len(adf_transform.get('aggregates', [])))
+            "PowerCenter": str(len(pc_props.get('aggregates', []))),
+            "Azure Data Factory": str(len(adf_props.get('aggregates', [])))
         })
 
     elif pc_type == 'Lookup':
         comparison_data.append({
             "Attribute": "Lookup Source",
-            "PowerCenter": pc_transform.get('lookup_table', 'N/A'),
-            "Azure Data Factory": adf_transform.get('lookupDataset', 'N/A')
+            "PowerCenter": pc_props.get('lookup_table', 'N/A'),
+            "Azure Data Factory": adf_props.get('lookupDataset', 'N/A')
         })
 
     # Mostrar tabla
     st.table(comparison_data)
 
     # Equivalencia visual
-    st.success(f"✅ **Mapping:** `{pc_transform.get('type', 'N/A')}` → `{adf_transform.get('type', 'N/A')}`")
+    st.success(f"✅ **Mapping:** `{pc_transform.type}` → `{adf_transform.get('type', 'N/A')}`")
 
 
 def render_flow_diagram():
@@ -470,25 +482,25 @@ def generate_mermaid_diagram(pc_data):
     lines = ["graph LR"]
 
     # Sources
-    for source in pc_data.get('sources', []):
-        src_name = source.get('name', 'Unknown').replace(' ', '_')
-        lines.append(f"    SRC_{src_name}[📥 {source.get('name', 'Unknown')}]")
+    for source in pc_data.sources:
+        src_name = source.name.replace(' ', '_')
+        lines.append(f"    SRC_{src_name}[📥 {source.name}]")
 
     # Transformations
-    for transform in pc_data.get('transformations', []):
-        trn_name = transform.get('name', 'Unknown').replace(' ', '_')
-        icon = get_transform_icon(transform.get('type', ''))
-        lines.append(f"    TRN_{trn_name}[{icon} {transform.get('name', 'Unknown')}]")
+    for transform in pc_data.transformations:
+        trn_name = transform.name.replace(' ', '_')
+        icon = get_transform_icon(transform.type)
+        lines.append(f"    TRN_{trn_name}[{icon} {transform.name}]")
 
     # Targets
-    for target in pc_data.get('targets', []):
-        tgt_name = target.get('name', 'Unknown').replace(' ', '_')
-        lines.append(f"    TGT_{tgt_name}[📤 {target.get('name', 'Unknown')}]")
+    for target in pc_data.targets:
+        tgt_name = target.name.replace(' ', '_')
+        lines.append(f"    TGT_{tgt_name}[📤 {target.name}]")
 
     # Connectors
-    for connector in pc_data.get('connectors', []):
-        from_inst = connector.get('from_instance', '').replace(' ', '_')
-        to_inst = connector.get('to_instance', '').replace(' ', '_')
+    for connector in pc_data.connectors:
+        from_inst = connector.from_instance.replace(' ', '_')
+        to_inst = connector.to_instance.replace(' ', '_')
         if from_inst and to_inst:
             lines.append(f"    {from_inst} --> {to_inst}")
 
