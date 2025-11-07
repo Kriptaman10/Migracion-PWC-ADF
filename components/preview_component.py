@@ -290,15 +290,15 @@ def render_adf_transformation(transform_name):
         st.warning("No ADF equivalent found")
         return
 
-    st.markdown(f"**Type:** `{props.get('type', 'Unknown')}`")
-    st.markdown(f"**Name:** `{props.get('name', 'Unknown')}`")
+    st.markdown(f"**Type:** `{transform.get('type', 'Unknown')}`")
+    st.markdown(f"**Name:** `{transform.get('name', 'Unknown')}`")
 
     # Renderizar JSON de la transformación
     with st.expander("📄 View JSON Configuration"):
         st.json(transform)
 
     # Detalles específicos por tipo
-    transform_type = props.get('type', '')
+    transform_type = transform.get('type', '')
 
     if transform_type == 'source':
         render_adf_source(transform)
@@ -320,16 +320,16 @@ def render_adf_transformation(transform_name):
 
 def render_adf_source(transform):
     """Renderiza Source de ADF"""
-    st.markdown(f"**Dataset:** `{props.get('dataset', 'N/A')}`")
-    if props.get('sourceFilter'):
-        st.code(props['sourceFilter'], language='sql')
+    st.markdown(f"**Dataset:** `{transform.get('dataset', 'N/A')}`")
+    if transform.get('sourceFilter'):
+        st.code(transform['sourceFilter'], language='sql')
 
 
 def render_adf_join(transform):
     """Renderiza Join de ADF"""
-    st.markdown(f"**Join Type:** `{props.get('joinType', 'N/A')}`")
+    st.markdown(f"**Join Type:** `{transform.get('joinType', 'N/A')}`")
     st.markdown("**Join Conditions:**")
-    for cond in props.get('joinConditions', []):
+    for cond in transform.get('joinConditions', []):
         st.code(
             f"{cond.get('leftColumn', 'N/A')} {cond.get('operator', '==')} {cond.get('rightColumn', 'N/A')}",
             language='python'
@@ -339,19 +339,19 @@ def render_adf_join(transform):
 def render_adf_aggregate(transform):
     """Renderiza Aggregate de ADF"""
     st.markdown("**Group By:**")
-    for field in props.get('groupBy', []):
+    for field in transform.get('groupBy', []):
         st.code(field, language='python')
 
     st.markdown("**Aggregates:**")
-    for agg in props.get('aggregates', []):
+    for agg in transform.get('aggregates', []):
         st.code(f"{agg.get('name', 'N/A')} = {agg.get('expression', 'N/A')}", language='python')
 
 
 def render_adf_lookup(transform):
     """Renderiza Lookup de ADF"""
-    st.markdown(f"**Dataset:** `{props.get('lookupDataset', 'N/A')}`")
+    st.markdown(f"**Dataset:** `{transform.get('lookupDataset', 'N/A')}`")
     st.markdown("**Lookup Conditions:**")
-    for cond in props.get('lookupConditions', []):
+    for cond in transform.get('lookupConditions', []):
         st.code(
             f"{cond.get('leftColumn', 'N/A')} {cond.get('operator', '==')} {cond.get('rightColumn', 'N/A')}",
             language='python'
@@ -361,21 +361,21 @@ def render_adf_lookup(transform):
 def render_adf_conditional_split(transform):
     """Renderiza Conditional Split de ADF"""
     st.markdown("**Conditions:**")
-    for cond in props.get('conditions', []):
+    for cond in transform.get('conditions', []):
         st.code(f"{cond.get('name', 'N/A')}: {cond.get('expression', 'N/A')}", language='python')
 
 
 def render_adf_sort(transform):
     """Renderiza Sort de ADF"""
     st.markdown("**Sort Columns:**")
-    for col in props.get('sortColumns', []):
+    for col in transform.get('sortColumns', []):
         st.text(f"  • {col.get('name', 'N/A')} ({col.get('order', 'asc')})")
 
 
 def render_adf_derived_column(transform):
     """Renderiza Derived Column de ADF"""
     st.markdown("**Columns:**")
-    columns = props.get('columns', [])
+    columns = transform.get('columns', [])
     for col in columns[:5]:
         st.code(f"{col.get('name', 'N/A')} = {col.get('expression', 'N/A')}", language='python')
 
@@ -386,7 +386,7 @@ def render_adf_derived_column(transform):
 def render_adf_filter(transform):
     """Renderiza Filter de ADF"""
     st.markdown("**Filter Expression:**")
-    st.code(props.get('condition', 'N/A'), language='python')
+    st.code(transform.get('condition', 'N/A'), language='python')
 
 
 def show_detailed_comparison(transform_name):
