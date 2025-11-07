@@ -434,15 +434,22 @@ def run_migration():
         progress_bar.progress(75)
 
         generator = ADFGenerator()
-        result = generator.generate(
-            adf_data,
-            config=st.session_state['config']
+        config = st.session_state.get('config', {})
+        mapping_name = st.session_state.get('xml_name', 'mapping')
+
+        # Generar archivos ADF
+        result = generator.generate_all(
+            name=mapping_name,
+            translated_structure=adf_data,
+            original_metadata=st.session_state['parsed_data']
         )
 
-        st.session_state['pipeline_json'] = result.get('pipeline', {})
-        st.session_state['dataflow_json'] = result.get('dataflow', {})
+        # Parsear resultados (son strings JSON, necesitamos convertir)
+        import json
+        st.session_state['pipeline_json'] = json.loads(result.get('pipeline', '{}'))
+        st.session_state['dataflow_json'] = json.loads(result.get('dataflow', '{}'))
         st.session_state['report_md'] = result.get('report', '')
-        st.session_state['datasets'] = result.get('datasets', [])
+        st.session_state['datasets'] = []
 
         time.sleep(0.3)
 

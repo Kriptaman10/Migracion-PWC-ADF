@@ -33,8 +33,9 @@ def render_preview_tab():
     if 'parsed_data' not in st.session_state or st.session_state['parsed_data'] is None:
         with st.spinner("🔄 Parsing PowerCenter XML..."):
             try:
+                from pathlib import Path
                 parser = PowerCenterParser()
-                parsed_data = parser.parse(st.session_state['xml_path'])
+                parsed_data = parser.parse_file(Path(st.session_state['xml_path']))
                 st.session_state['parsed_data'] = parsed_data
                 st.success("✅ XML parsed successfully")
             except Exception as e:
@@ -49,10 +50,7 @@ def render_preview_tab():
         with st.spinner("🔄 Translating to Azure Data Factory..."):
             try:
                 translator = PowerCenterTranslator()
-                adf_data = translator.translate(
-                    st.session_state['parsed_data'],
-                    st.session_state['config']
-                )
+                adf_data = translator.translate_mapping(st.session_state['parsed_data'])
                 st.session_state['adf_data'] = adf_data
                 st.success("✅ Translation completed")
             except Exception as e:

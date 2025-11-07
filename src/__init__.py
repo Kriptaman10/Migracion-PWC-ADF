@@ -8,8 +8,8 @@ __author__ = "Practicante Entix"
 __license__ = "MIT"
 
 # Exportar clases principales para la interfaz web
-from .parser import PowerCenterParser
-from .translator import PowerCenterTranslator
+from .parser import PowerCenterXMLParser as PowerCenterParser
+from .translator import PowerCenterToADFTranslator as PowerCenterTranslator
 from .generator import ADFGenerator
 from .validator import MappingValidator
 
