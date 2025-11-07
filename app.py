@@ -63,7 +63,7 @@ st.markdown("""
     /* Header principal */
     .main-header {
         font-size: 2.5rem;
-        color: #0078D4;
+        color: #E31837;
         text-align: center;
         margin-bottom: 1rem;
         font-weight: bold;
@@ -81,7 +81,7 @@ st.markdown("""
         background-color: #f0f2f6;
         padding: 15px;
         border-radius: 8px;
-        border-left: 4px solid #0078D4;
+        border-left: 4px solid #E31837;
     }
 
     /* Boxes de estado */
@@ -110,8 +110,8 @@ st.markdown("""
     }
 
     .info-box {
-        background-color: #d1ecf1;
-        border-left: 5px solid #0078D4;
+        background-color: #ffe6e6;
+        border-left: 5px solid #E31837;
         padding: 15px;
         margin: 10px 0;
         border-radius: 4px;
@@ -129,7 +129,7 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #0078D4;
+        background-color: #E31837;
         color: white;
     }
 
@@ -147,7 +147,7 @@ st.markdown("""
 
     /* File uploader */
     .uploadedFile {
-        border: 2px dashed #0078D4;
+        border: 2px dashed #E31837;
         border-radius: 8px;
         padding: 20px;
     }

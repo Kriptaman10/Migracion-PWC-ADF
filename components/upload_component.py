@@ -29,8 +29,8 @@ def render_upload_tab():
         st.subheader("🔹 Single File Upload")
 
         st.markdown("""
-        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 2px dashed #0078D4; text-align: center; margin-bottom: 10px;">
-            <h4 style="color: #0078D4; margin: 0;">📂 Drop your XML file here</h4>
+        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 2px dashed #E31837; text-align: center; margin-bottom: 10px;">
+            <h4 style="color: #E31837; margin: 0;">📂 Drop your XML file here</h4>
             <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9rem;">or click Browse Files below</p>
         </div>
         """, unsafe_allow_html=True)
