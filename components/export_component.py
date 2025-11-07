@@ -461,11 +461,31 @@ def run_migration():
             original_metadata=st.session_state['parsed_data']
         )
 
-        # Parsear resultados (son strings JSON, necesitamos convertir)
-        import json
-        st.session_state['pipeline_json'] = json.loads(result.get('pipeline', '{}'))
-        st.session_state['dataflow_json'] = json.loads(result.get('dataflow', '{}'))
-        st.session_state['report_md'] = result.get('report', '')
+        # Leer archivos generados (result contiene rutas, no contenido)
+        # Leer pipeline JSON desde archivo
+        pipeline_path = result.get('pipeline', '')
+        if pipeline_path and Path(pipeline_path).exists():
+            with open(pipeline_path, 'r', encoding='utf-8') as f:
+                st.session_state['pipeline_json'] = json.load(f)
+        else:
+            st.session_state['pipeline_json'] = {}
+
+        # Leer dataflow JSON desde archivo
+        dataflow_path = result.get('dataflow', '')
+        if dataflow_path and Path(dataflow_path).exists():
+            with open(dataflow_path, 'r', encoding='utf-8') as f:
+                st.session_state['dataflow_json'] = json.load(f)
+        else:
+            st.session_state['dataflow_json'] = {}
+
+        # Leer reporte desde archivo
+        report_path = result.get('report', '')
+        if report_path and Path(report_path).exists():
+            with open(report_path, 'r', encoding='utf-8') as f:
+                st.session_state['report_md'] = f.read()
+        else:
+            st.session_state['report_md'] = ''
+
         st.session_state['datasets'] = []
 
         time.sleep(0.3)
