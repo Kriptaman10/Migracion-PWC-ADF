@@ -168,6 +168,9 @@ st.markdown("""
 def initialize_session_state():
     """Inicializa todas las variables de session state necesarias"""
 
+    # Crear carpeta temporal si no existe
+    Path("temp").mkdir(exist_ok=True)
+
     # Estado de archivos
     if 'xml_files' not in st.session_state:
         st.session_state['xml_files'] = []

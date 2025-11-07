@@ -28,11 +28,19 @@ def render_upload_tab():
     with col1:
         st.subheader("🔹 Single File Upload")
 
+        st.markdown("""
+        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 2px dashed #0078D4; text-align: center; margin-bottom: 10px;">
+            <h4 style="color: #0078D4; margin: 0;">📂 Drop your XML file here</h4>
+            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9rem;">or click Browse Files below</p>
+        </div>
+        """, unsafe_allow_html=True)
+
         uploaded_file = st.file_uploader(
-            "Drag & drop XML file here",
+            "Browse Files",
             type=['xml'],
             help="Upload a single PowerCenter mapping XML file",
-            key="single_uploader"
+            key="single_uploader",
+            label_visibility="collapsed"
         )
 
         if uploaded_file is not None:

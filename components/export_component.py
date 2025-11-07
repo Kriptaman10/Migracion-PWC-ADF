@@ -10,6 +10,7 @@ Author: Benjamín Riquelme
 import streamlit as st
 import json
 import time
+import traceback
 from pathlib import Path
 from io import BytesIO
 import zipfile
@@ -23,6 +24,22 @@ def render_export_tab():
     Renderiza el tab de resultados y exportación
     """
     st.header("📊 Migration Results & Export")
+
+    # Mostrar errores persistentes si existen
+    if st.session_state.get('migration_error'):
+        st.error(f"❌ **Previous Migration Failed**")
+        st.error(f"**Error:** {st.session_state['migration_error']}")
+        with st.expander("🔍 View Full Error Details", expanded=False):
+            st.code(st.session_state.get('migration_error_trace', 'No trace available'), language='python')
+
+        # Botón para limpiar el error y reintentar
+        if st.button("🔄 Clear Error and Retry", type="secondary"):
+            st.session_state['migration_error'] = None
+            st.session_state['migration_error_trace'] = None
+            st.session_state['migrated'] = False
+            st.rerun()
+
+        st.markdown("---")
 
     if not st.session_state.get('xml_loaded') or not st.session_state.get('configured'):
         st.warning("⚠️ Please complete upload and configuration first")
@@ -476,8 +493,18 @@ def run_migration():
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"❌ Migration failed: {str(e)}")
-        st.exception(e)
+
+        # Guardar error en session_state para que persista
+        error_msg = str(e)
+        st.session_state['migration_error'] = error_msg
+        st.session_state['migration_error_trace'] = traceback.format_exc()
+
+        st.error(f"❌ **Migration Failed**")
+        st.error(f"**Error:** {error_msg}")
+
+        # Mostrar traceback completo en expander
+        with st.expander("🔍 View Full Error Details"):
+            st.code(st.session_state['migration_error_trace'], language='python')
 
 
 def create_migration_package(pipeline_json, dataflow_json, report_md, datasets):
