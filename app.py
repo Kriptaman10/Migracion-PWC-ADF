@@ -14,6 +14,38 @@ import sys
 from pathlib import Path
 import json
 import time
+import logging
+
+# ====================================================================
+# CONFIGURACIÓN DE LOGGING (DEBE IR AL INICIO)
+# ====================================================================
+
+# Configurar el root logger para capturar TODOS los logs
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+
+# Limpiar handlers existentes
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+
+# Crear formato detallado
+formatter = logging.Formatter('%(levelname)s - %(name)s - %(message)s')
+
+# Handler para stderr
+console_handler = logging.StreamHandler(sys.stderr)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+root_logger.addHandler(console_handler)
+
+# Handler para archivo
+file_handler = logging.FileHandler('migration_debug.log', mode='w', encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+root_logger.addHandler(file_handler)
+
+# Configurar logger específico para la migración
+logger = logging.getLogger('pc-to-adf')
+logger.setLevel(logging.DEBUG)
 
 # Agregar src y components al path
 sys.path.insert(0, str(Path(__file__).parent / 'components'))
@@ -224,6 +256,10 @@ def initialize_session_state():
     if 'migration_time' not in st.session_state:
         st.session_state['migration_time'] = 0.0
 
+    # Control de navegación entre tabs
+    if 'active_tab' not in st.session_state:
+        st.session_state['active_tab'] = 0  # 0=Upload, 1=Config, 2=Preview, 3=Export
+
 # Ejecutar inicialización
 initialize_session_state()
 
@@ -316,26 +352,36 @@ with st.sidebar:
         st.rerun()
 
 # ====================================================================
-# TABS PRINCIPALES
+# NAVEGACIÓN PRINCIPAL CON CONTROL PROGRAMÁTICO
 # ====================================================================
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📁 Upload & Load",
-    "⚙️ Configuration",
-    "🔍 Preview & Compare",
-    "📊 Results & Export"
-])
+tab_names = ["📁 Upload & Load", "⚙️ Configuration", "🔍 Preview & Compare", "📊 Results & Export"]
 
-with tab1:
+# Pills de navegación con control programático
+selected_tab = st.pills(
+    "Navigation",
+    options=range(len(tab_names)),
+    format_func=lambda i: tab_names[i],
+    default=st.session_state.get('active_tab', 0),
+    key="main_nav_pills",
+    label_visibility="collapsed"
+)
+
+# Actualizar active_tab cuando el usuario hace clic manualmente
+if selected_tab != st.session_state['active_tab']:
+    st.session_state['active_tab'] = selected_tab
+    st.rerun()
+
+st.markdown("---")
+
+# Renderizar el contenido del tab activo
+if st.session_state['active_tab'] == 0:
     render_upload_tab()
-
-with tab2:
+elif st.session_state['active_tab'] == 1:
     render_config_tab()
-
-with tab3:
+elif st.session_state['active_tab'] == 2:
     render_preview_tab()
-
-with tab4:
+elif st.session_state['active_tab'] == 3:
     render_export_tab()
 
 # ====================================================================

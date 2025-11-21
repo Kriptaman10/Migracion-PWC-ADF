@@ -51,10 +51,17 @@ def render_export_tab():
     if not st.session_state.get('migrated'):
         st.info("ℹ️ Ready to migrate. Click the button below to start the migration process.")
 
+        # Checkbox para saltar validación
+        skip_validation = st.checkbox(
+            "⚠️ Skip validation and migrate anyway",
+            value=False,
+            help="Enable this to skip validation errors and force migration. Use with caution."
+        )
+
         col_center = st.columns([1, 2, 1])[1]
         with col_center:
             if st.button("🚀 Run Migration", type="primary", use_container_width=True):
-                run_migration()
+                run_migration(skip_validation=skip_validation)
                 st.rerun()
 
         st.stop()
@@ -159,11 +166,40 @@ def render_report_tab():
     """Renderiza el tab del reporte"""
     st.subheader("📄 Migration Report")
 
-    report_md = st.session_state.get('report_md', '')
+    # Verificar si hay múltiples migraciones
+    all_migrations = st.session_state.get('all_migrations', [])
 
-    if not report_md:
-        st.info("ℹ️ No report generated yet")
-        return
+    if not all_migrations:
+        # Fallback a modo legacy (un solo archivo)
+        report_md = st.session_state.get('report_md', '')
+        if not report_md:
+            st.info("ℹ️ No report generated yet")
+            return
+        selected_migration = {'name': st.session_state.get('xml_name', 'mapping'), 'report_md': report_md}
+    else:
+        # Modo multi-archivo: mostrar selector
+        if len(all_migrations) > 1:
+            st.markdown("**Select mapping to view:**")
+            mapping_names = [f"{m['name']} ({m['file_name']})" for m in all_migrations]
+
+            selected_idx = st.selectbox(
+                "Mapping:",
+                options=range(len(all_migrations)),
+                format_func=lambda i: mapping_names[i],
+                key="report_selector",
+                label_visibility="collapsed"
+            )
+
+            st.session_state['selected_migration_idx'] = selected_idx
+        else:
+            selected_idx = 0
+
+        selected_migration = all_migrations[selected_idx]
+        report_md = selected_migration['report_md']
+
+        if not report_md:
+            st.warning(f"⚠️ No report generated for {selected_migration['name']}")
+            return
 
     # Opción de vista
     view_mode = st.radio(
@@ -196,7 +232,7 @@ def render_report_tab():
         st.download_button(
             "📥 Download MD",
             data=report_md,
-            file_name=f"report_{st.session_state['xml_name']}.md",
+            file_name=f"report_{selected_migration['name']}.md",
             mime="text/markdown",
             use_container_width=True,
             key="download_report_md"
@@ -211,11 +247,40 @@ def render_pipeline_json_tab():
     """Renderiza el tab del pipeline JSON"""
     st.subheader("📋 Azure Data Factory Pipeline")
 
-    pipeline_json = st.session_state.get('pipeline_json', {})
+    # Verificar si hay múltiples migraciones
+    all_migrations = st.session_state.get('all_migrations', [])
 
-    if not pipeline_json:
-        st.info("ℹ️ No pipeline JSON generated yet")
-        return
+    if not all_migrations:
+        # Fallback a modo legacy (un solo archivo)
+        pipeline_json = st.session_state.get('pipeline_json', {})
+        if not pipeline_json:
+            st.info("ℹ️ No pipeline JSON generated yet")
+            return
+        selected_migration = {'name': st.session_state.get('xml_name', 'mapping'), 'pipeline_json': pipeline_json}
+    else:
+        # Modo multi-archivo: mostrar selector
+        if len(all_migrations) > 1:
+            st.markdown("**Select mapping to view:**")
+            mapping_names = [f"{m['name']} ({m['file_name']})" for m in all_migrations]
+
+            selected_idx = st.selectbox(
+                "Mapping:",
+                options=range(len(all_migrations)),
+                format_func=lambda i: mapping_names[i],
+                key="pipeline_selector",
+                label_visibility="collapsed"
+            )
+
+            st.session_state['selected_migration_idx'] = selected_idx
+        else:
+            selected_idx = 0
+
+        selected_migration = all_migrations[selected_idx]
+        pipeline_json = selected_migration['pipeline_json']
+
+        if not pipeline_json:
+            st.warning(f"⚠️ No pipeline JSON generated for {selected_migration['name']}")
+            return
 
     # Información del pipeline
     col_info1, col_info2 = st.columns(2)
@@ -249,7 +314,7 @@ def render_pipeline_json_tab():
         st.download_button(
             "📥 Download JSON",
             data=json.dumps(pipeline_json, indent=2),
-            file_name=f"pipeline_{st.session_state['xml_name']}.json",
+            file_name=f"pipeline_{selected_migration['name']}.json",
             mime="application/json",
             use_container_width=True,
             key="download_pipeline"
@@ -260,11 +325,40 @@ def render_dataflow_json_tab():
     """Renderiza el tab del dataflow JSON"""
     st.subheader("🔄 Azure Data Factory Data Flow")
 
-    dataflow_json = st.session_state.get('dataflow_json', {})
+    # Verificar si hay múltiples migraciones
+    all_migrations = st.session_state.get('all_migrations', [])
 
-    if not dataflow_json:
-        st.info("ℹ️ No dataflow JSON generated yet")
-        return
+    if not all_migrations:
+        # Fallback a modo legacy (un solo archivo)
+        dataflow_json = st.session_state.get('dataflow_json', {})
+        if not dataflow_json:
+            st.info("ℹ️ No dataflow JSON generated yet")
+            return
+        selected_migration = {'name': st.session_state.get('xml_name', 'mapping'), 'dataflow_json': dataflow_json}
+    else:
+        # Modo multi-archivo: mostrar selector
+        if len(all_migrations) > 1:
+            st.markdown("**Select mapping to view:**")
+            mapping_names = [f"{m['name']} ({m['file_name']})" for m in all_migrations]
+
+            selected_idx = st.selectbox(
+                "Mapping:",
+                options=range(len(all_migrations)),
+                format_func=lambda i: mapping_names[i],
+                key="dataflow_selector",
+                label_visibility="collapsed"
+            )
+
+            st.session_state['selected_migration_idx'] = selected_idx
+        else:
+            selected_idx = 0
+
+        selected_migration = all_migrations[selected_idx]
+        dataflow_json = selected_migration['dataflow_json']
+
+        if not dataflow_json:
+            st.warning(f"⚠️ No dataflow JSON generated for {selected_migration['name']}")
+            return
 
     # Información del dataflow
     properties = dataflow_json.get('properties', {})
@@ -305,7 +399,7 @@ def render_dataflow_json_tab():
         st.download_button(
             "📥 Download JSON",
             data=json.dumps(dataflow_json, indent=2),
-            file_name=f"dataflow_{st.session_state['xml_name']}.json",
+            file_name=f"dataflow_{selected_migration['name']}.json",
             mime="application/json",
             use_container_width=True,
             key="download_dataflow"
@@ -316,7 +410,33 @@ def render_datasets_tab():
     """Renderiza el tab de datasets"""
     st.subheader("📦 Dataset Definitions")
 
-    datasets = st.session_state.get('datasets', [])
+    # Verificar si hay múltiples migraciones
+    all_migrations = st.session_state.get('all_migrations', [])
+
+    if not all_migrations:
+        # Fallback a modo legacy (un solo archivo)
+        datasets = st.session_state.get('datasets', [])
+        selected_migration = {'name': st.session_state.get('xml_name', 'mapping'), 'datasets': datasets}
+    else:
+        # Modo multi-archivo: mostrar selector
+        if len(all_migrations) > 1:
+            st.markdown("**Select mapping to view:**")
+            mapping_names = [f"{m['name']} ({m['file_name']})" for m in all_migrations]
+
+            selected_idx = st.selectbox(
+                "Mapping:",
+                options=range(len(all_migrations)),
+                format_func=lambda i: mapping_names[i],
+                key="datasets_mapping_selector",
+                label_visibility="collapsed"
+            )
+
+            st.session_state['selected_migration_idx'] = selected_idx
+        else:
+            selected_idx = 0
+
+        selected_migration = all_migrations[selected_idx]
+        datasets = selected_migration['datasets']
 
     if not datasets:
         st.info("ℹ️ No separate dataset files generated (datasets may be embedded in pipeline/dataflow)")
@@ -403,98 +523,147 @@ def render_download_section():
             st.error(f"❌ Error creating ZIP package: {str(e)}")
 
 
-def run_migration():
-    """Ejecuta el proceso completo de migración"""
+def run_migration(skip_validation=False):
+    """
+    Ejecuta el proceso completo de migración para TODOS los archivos cargados
+
+    Args:
+        skip_validation: Si es True, omite la validación y continúa con la migración
+    """
+    from src import PowerCenterParser, PowerCenterTranslator
+
     start_time = time.time()
 
     progress_bar = st.progress(0)
     status_text = st.empty()
 
+    # Obtener lista de archivos a procesar
+    xml_files = st.session_state.get('xml_files', [])
+    if not xml_files:
+        st.error("❌ No XML files loaded")
+        return
+
+    total_files = len(xml_files)
+    all_migrations = []
+    total_errors = 0
+    total_warnings = 0
+
     try:
         # =====================================================
-        # PASO 1: VALIDAR (25%)
+        # PROCESAR CADA ARCHIVO
         # =====================================================
-        status_text.text("⏳ Step 1/4: Validating mapping...")
-        progress_bar.progress(25)
+        for file_idx, xml_file in enumerate(xml_files):
+            file_name = xml_file['name']
+            file_path = Path(xml_file['path'])
+            mapping_name = file_path.stem
 
-        validator = MappingValidator()
-        errors, warnings = validator.validate(st.session_state['parsed_data'])
+            # Calcular progreso global
+            base_progress = int((file_idx / total_files) * 100)
+            step_size = int(100 / total_files / 4)  # 4 pasos por archivo
 
-        st.session_state['errors_count'] = len(errors)
-        st.session_state['warnings_count'] = len(warnings)
+            status_text.text(f"📄 Processing {file_idx + 1}/{total_files}: {file_name}")
 
-        if errors:
-            st.error(f"❌ Validation failed with {len(errors)} errors")
-            for error in errors:
-                st.error(f"  • {error}")
-            progress_bar.empty()
-            status_text.empty()
-            return
+            # PASO 1: PARSEAR XML
+            status_text.text(f"⏳ [{file_idx + 1}/{total_files}] Parsing {file_name}...")
+            progress_bar.progress(base_progress + step_size * 0)
 
-        time.sleep(0.3)
+            parser = PowerCenterParser()
+            parsed_data = parser.parse_file(file_path)
+
+            time.sleep(0.1)
+
+            # PASO 2: TRADUCIR A ADF
+            status_text.text(f"⏳ [{file_idx + 1}/{total_files}] Translating {file_name}...")
+            progress_bar.progress(base_progress + step_size * 1)
+
+            translator = PowerCenterTranslator()
+            adf_data = translator.translate_mapping(parsed_data)
+
+            time.sleep(0.1)
+
+            # PASO 3: VALIDAR (si no se salta)
+            errors = []
+            warnings = []
+
+            if not skip_validation:
+                status_text.text(f"⏳ [{file_idx + 1}/{total_files}] Validating {file_name}...")
+                progress_bar.progress(base_progress + step_size * 2)
+
+                validator = MappingValidator()
+                errors, warnings = validator.validate(parsed_data)
+
+                total_errors += len(errors)
+                total_warnings += len(warnings)
+
+                time.sleep(0.1)
+
+            # PASO 4: GENERAR ARCHIVOS
+            status_text.text(f"⏳ [{file_idx + 1}/{total_files}] Generating files for {file_name}...")
+            progress_bar.progress(base_progress + step_size * 3)
+
+            generator = ADFGenerator()
+            result = generator.generate_all(
+                name=mapping_name,
+                translated_structure=adf_data,
+                original_metadata=parsed_data
+            )
+
+            # Leer archivos generados
+            pipeline_json = {}
+            dataflow_json = {}
+            report_md = ''
+
+            pipeline_path = result.get('pipeline', '')
+            if pipeline_path and Path(pipeline_path).exists():
+                with open(pipeline_path, 'r', encoding='utf-8') as f:
+                    pipeline_json = json.load(f)
+
+            dataflow_path = result.get('dataflow', '')
+            if dataflow_path and Path(dataflow_path).exists():
+                with open(dataflow_path, 'r', encoding='utf-8') as f:
+                    dataflow_json = json.load(f)
+
+            report_path = result.get('report', '')
+            if report_path and Path(report_path).exists():
+                with open(report_path, 'r', encoding='utf-8') as f:
+                    report_md = f.read()
+
+            # Guardar resultado de este archivo
+            all_migrations.append({
+                'name': mapping_name,
+                'file_name': file_name,
+                'pipeline_json': pipeline_json,
+                'dataflow_json': dataflow_json,
+                'report_md': report_md,
+                'datasets': [],
+                'errors': errors,
+                'warnings': warnings,
+                'file_paths': result
+            })
+
+            time.sleep(0.1)
 
         # =====================================================
-        # PASO 2: VERIFICAR TRADUCCIÓN (50%)
+        # FINALIZAR
         # =====================================================
-        status_text.text("⏳ Step 2/4: Verifying translation...")
-        progress_bar.progress(50)
-
-        # La traducción ya está en session_state desde el preview
-        adf_data = st.session_state['adf_data']
-
-        time.sleep(0.3)
-
-        # =====================================================
-        # PASO 3: GENERAR ARCHIVOS (75%)
-        # =====================================================
-        status_text.text("⏳ Step 3/4: Generating ADF files...")
-        progress_bar.progress(75)
-
-        generator = ADFGenerator()
-        config = st.session_state.get('config', {})
-        mapping_name = st.session_state.get('xml_name', 'mapping')
-
-        # Generar archivos ADF
-        result = generator.generate_all(
-            name=mapping_name,
-            translated_structure=adf_data,
-            original_metadata=st.session_state['parsed_data']
-        )
-
-        # Leer archivos generados (result contiene rutas, no contenido)
-        # Leer pipeline JSON desde archivo
-        pipeline_path = result.get('pipeline', '')
-        if pipeline_path and Path(pipeline_path).exists():
-            with open(pipeline_path, 'r', encoding='utf-8') as f:
-                st.session_state['pipeline_json'] = json.load(f)
-        else:
-            st.session_state['pipeline_json'] = {}
-
-        # Leer dataflow JSON desde archivo
-        dataflow_path = result.get('dataflow', '')
-        if dataflow_path and Path(dataflow_path).exists():
-            with open(dataflow_path, 'r', encoding='utf-8') as f:
-                st.session_state['dataflow_json'] = json.load(f)
-        else:
-            st.session_state['dataflow_json'] = {}
-
-        # Leer reporte desde archivo
-        report_path = result.get('report', '')
-        if report_path and Path(report_path).exists():
-            with open(report_path, 'r', encoding='utf-8') as f:
-                st.session_state['report_md'] = f.read()
-        else:
-            st.session_state['report_md'] = ''
-
-        st.session_state['datasets'] = []
-
-        time.sleep(0.3)
-
-        # =====================================================
-        # PASO 4: FINALIZAR (100%)
-        # =====================================================
-        status_text.text("⏳ Step 4/4: Finalizing...")
+        status_text.text("⏳ Finalizing migration...")
         progress_bar.progress(100)
+
+        # Guardar todos los resultados en session_state
+        st.session_state['all_migrations'] = all_migrations
+        st.session_state['errors_count'] = total_errors
+        st.session_state['warnings_count'] = total_warnings
+
+        # Establecer el primer mapping como seleccionado por defecto
+        if all_migrations:
+            st.session_state['selected_migration_idx'] = 0
+
+            # Mantener compatibilidad con código legacy que espera estos campos
+            first = all_migrations[0]
+            st.session_state['pipeline_json'] = first['pipeline_json']
+            st.session_state['dataflow_json'] = first['dataflow_json']
+            st.session_state['report_md'] = first['report_md']
+            st.session_state['datasets'] = first['datasets']
 
         end_time = time.time()
         st.session_state['migration_time'] = end_time - start_time
@@ -507,7 +676,11 @@ def run_migration():
         status_text.empty()
 
         # Mostrar éxito
-        st.success("✅ Migration completed successfully!")
+        st.success(f"✅ Successfully migrated {total_files} mapping(s)!")
+        if total_errors > 0:
+            st.warning(f"⚠️ {total_errors} validation error(s) found across all files")
+        if total_warnings > 0:
+            st.info(f"ℹ️ {total_warnings} warning(s) found across all files")
         st.balloons()
 
     except Exception as e:

@@ -224,8 +224,12 @@ def render_config_tab():
         if st.button("💾 Save Configuration", type="primary", use_container_width=True):
             st.session_state['config'] = config
             st.session_state['configured'] = True
+
+            # Auto-navegación al tab de Preview
+            st.session_state['active_tab'] = 2
             st.success("✅ Configuration saved successfully!")
             st.balloons()
+            st.rerun()
 
     with col_btn2:
         if st.button("🔄 Reset to Defaults", use_container_width=True):

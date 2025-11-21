@@ -26,57 +26,75 @@ def render_upload_tab():
     # COLUMNA 1: CARGA INDIVIDUAL
     # =====================================================
     with col1:
-        st.subheader("🔹 Single File Upload")
+        st.subheader("🔹 Drag & Drop Multiple Files")
 
         st.markdown("""
         <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 2px dashed #E31837; text-align: center; margin-bottom: 10px;">
-            <h4 style="color: #E31837; margin: 0;">📂 Drop your XML file here</h4>
-            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9rem;">or click Browse Files below</p>
+            <h4 style="color: #E31837; margin: 0;">📂 Drop your XML files here</h4>
+            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9rem;">You can drag multiple files at once or click Browse Files below</p>
         </div>
         """, unsafe_allow_html=True)
 
-        uploaded_file = st.file_uploader(
+        uploaded_files = st.file_uploader(
             "Browse Files",
             type=['xml'],
-            help="Upload a single PowerCenter mapping XML file",
-            key="single_uploader",
-            label_visibility="collapsed"
+            help="Upload one or more PowerCenter mapping XML files",
+            key="multiple_uploader",
+            label_visibility="collapsed",
+            accept_multiple_files=True
         )
 
-        if uploaded_file is not None:
-            # Guardar archivo temporalmente
-            temp_path = Path("temp") / uploaded_file.name
-            temp_path.parent.mkdir(exist_ok=True)
+        if uploaded_files is not None and len(uploaded_files) > 0:
+            # Procesar cada archivo subido
+            new_files_count = 0
+            errors = []
 
-            try:
-                # Escribir archivo
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            for uploaded_file in uploaded_files:
+                # Verificar si ya existe
+                if any(f['name'] == uploaded_file.name for f in st.session_state['xml_files']):
+                    continue
 
-                # Validar que sea XML válido
+                # Guardar archivo temporalmente
+                temp_path = Path("temp") / uploaded_file.name
+                temp_path.parent.mkdir(exist_ok=True)
+
                 try:
-                    ET.parse(str(temp_path))
+                    # Escribir archivo
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-                    # Agregar a lista de archivos si no existe
-                    if not any(f['name'] == uploaded_file.name for f in st.session_state['xml_files']):
+                    # Validar que sea XML válido
+                    try:
+                        ET.parse(str(temp_path))
+
+                        # Agregar a lista de archivos
                         st.session_state['xml_files'].append({
                             'name': uploaded_file.name,
                             'path': str(temp_path),
                             'size': round(uploaded_file.size / 1024, 2)
                         })
-                        st.success(f"✅ Added {uploaded_file.name}")
-                        st.rerun()
-                    else:
-                        st.info(f"ℹ️ {uploaded_file.name} already loaded")
+                        new_files_count += 1
 
-                except ET.ParseError as e:
-                    st.error(f"❌ Invalid XML file: {str(e)}")
-                    # Eliminar archivo inválido
-                    if temp_path.exists():
-                        temp_path.unlink()
+                    except ET.ParseError as e:
+                        errors.append(f"Invalid XML '{uploaded_file.name}': {str(e)}")
+                        # Eliminar archivo inválido
+                        if temp_path.exists():
+                            temp_path.unlink()
 
-            except Exception as e:
-                st.error(f"❌ Error processing file: {str(e)}")
+                except Exception as e:
+                    errors.append(f"Error processing '{uploaded_file.name}': {str(e)}")
+
+            # Mostrar resultados
+            if new_files_count > 0:
+                st.success(f"✅ Successfully added {new_files_count} file(s)")
+                st.rerun()
+
+            if errors:
+                for error in errors:
+                    st.error(f"❌ {error}")
+
+            if new_files_count == 0 and len(errors) == 0:
+                st.info(f"ℹ️ All {len(uploaded_files)} file(s) already loaded")
 
     # =====================================================
     # COLUMNA 2: CARGA DESDE CARPETA
@@ -153,7 +171,11 @@ def render_upload_tab():
                         st.session_state['xml_name'] = Path(first_file['name']).stem
 
                     st.session_state['xml_loaded'] = True
+
+                    # Auto-navegación al tab de Configuration
+                    st.session_state['active_tab'] = 1
                     st.success("✅ Ready to configure!")
+                    st.rerun()
                 else:
                     st.warning("⚠️ Please load at least one XML file")
 
