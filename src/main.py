@@ -17,7 +17,7 @@ from rich import print as rprint
 
 from .parser import parse_powercenter_xml
 from .translator import PowerCenterToADFTranslator
-from .generator import ADFGenerator
+from .script_generator import ADFScriptGenerator as ADFGenerator
 from .validator import MappingValidator
 from .utils import (
     setup_logging,

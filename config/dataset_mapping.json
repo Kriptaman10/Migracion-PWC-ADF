@@ -1,0 +1,28 @@
+{
+  "description": "Mapeo exacto de nombres de objetos PowerCenter a datasets ADF validados en producción",
+  "version": "1.0",
+  "mappings": {
+    "dates": "ds_dates",
+    "STG_DATES": "ds_STG_DATES",
+    "VENTA_DIARIA_20250928": "ds_VENTA_DIARIA_20250928",
+    "VENTA_DIARIA": "ds_VENTA_DIARIA",
+    "ERRORES_DUPLICADOS": "ds_ERRORES_DUPLICADOS",
+    "ERRORES_VENTA_DIARIA": "ds_ERRORES_VENTA_DIARIA",
+    "VENTAS": "ds_source_ventas",
+    "POLIZAS": "ds_source_polizas",
+    "VENTAPOL": "ds_VENTAPOL",
+    "employees_layout": "ds_employees_layout",
+    "lkp_salaries": "ds_lkp_salaries",
+    "STG_EMPLOYEES": "ds_STG_EMPLOYEES",
+    "DIM_PROMOTIONS": "ds_DIM_PROMOTIONS",
+    "STG_TRANSACTIONS": "ds_STG_TRANSACTIONS",
+    "DIM_DATES": "ds_DIM_DATES",
+    "STG_PRODUCT": "ds_STG_PRODUCT",
+    "FACT_PROMOTIONS_AGG_DAILY": "ds_FACT_PROMOTIONS_AGG_DAILY"
+  },
+  "default_patterns": {
+    "source_prefix": "ds_source_",
+    "target_prefix": "ds_",
+    "lookup_prefix": "ds_lkp_"
+  }
+}

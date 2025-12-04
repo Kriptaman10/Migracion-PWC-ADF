@@ -1,6 +1,7 @@
 """
 Traductor de componentes PowerCenter a Azure Data Factory
 Mapea transformaciones, expresiones y tipos de datos
+Versión 2.0 con traductor de expresiones robusto
 """
 
 import re
@@ -16,6 +17,7 @@ from .parser import (
     Target
 )
 from .utils import load_json, MigrationError
+from .expression_translator import translate_expression as translate_expr_robust
 
 logger = logging.getLogger('pc-to-adf.translator')
 
@@ -53,6 +55,13 @@ class PowerCenterToADFTranslator:
         self.warnings: List[str] = []
         self.errors: List[str] = []
 
+        # Mapa de conexiones para rastrear el grafo
+        self.connection_map: Dict[str, List[str]] = {}
+
+        # Mapa de columnas con su casing original (case-sensitive tracking)
+        # Formato: {nombre_lower: nombre_original}
+        self.column_case_map: Dict[str, str] = {}
+
     def translate_mapping(self, metadata: MappingMetadata) -> Dict[str, Any]:
         """
         Traduce un mapping completo de PowerCenter a ADF.
@@ -64,6 +73,15 @@ class PowerCenterToADFTranslator:
             Diccionario con la estructura traducida para ADF
         """
         logger.info(f"Iniciando traducción del mapping: {metadata.name}")
+
+        # Guardar referencia al metadata para usar en resoluciones
+        self.metadata = metadata
+
+        # Construir mapa de conexiones desde los connectors
+        self._build_connection_map(metadata.connectors)
+
+        # Construir mapa de columnas con su casing original desde sources
+        self._build_column_case_map(metadata.sources)
 
         adf_structure = {
             'name': metadata.name,
@@ -106,6 +124,144 @@ class PowerCenterToADFTranslator:
         )
 
         return adf_structure
+
+    def _build_connection_map(self, connectors: List) -> None:
+        """
+        Construye un mapa de conexiones para rastrear el grafo de transformaciones.
+
+        Args:
+            connectors: Lista de conectores del mapping
+        """
+        self.connection_map = {}
+
+        logger.info("=== CONSTRUYENDO CONNECTION MAP ===")
+
+        for connector in connectors:
+            to_instance = connector.to_instance
+            from_instance = connector.from_instance
+
+            if to_instance not in self.connection_map:
+                self.connection_map[to_instance] = []
+
+            self.connection_map[to_instance].append(from_instance)
+            logger.debug(f"Connector: {from_instance} -> {to_instance}")
+
+        # Log del connection map completo
+        logger.info("=== CONNECTION MAP COMPLETO ===")
+        for to_inst, from_insts in self.connection_map.items():
+            logger.info(f"  {to_inst} <- {from_insts}")
+
+    def _resolve_source_qualifier_to_source(self, transformation_name: str, metadata: 'MappingMetadata') -> str:
+        """
+        CRÍTICO: Resuelve el nombre de un Source Qualifier al nombre de su Source real.
+
+        En PowerCenter, los Source Qualifiers (SQ_*) son transformaciones intermedias que
+        leen de un Source. En ADF, debemos usar el nombre del Source directamente.
+
+        Args:
+            transformation_name: Nombre de la transformación (ej: "SQ_POLIZAS")
+            metadata: Metadata del mapping con todas las transformaciones
+
+        Returns:
+            Nombre del source real si es un SQ, o el nombre original si no lo es
+        """
+        logger.info(f"=== RESOLVIENDO: '{transformation_name}' ===")
+
+        # Verificar si es un Source Qualifier
+        is_sq = False
+        for trans in metadata.transformations:
+            if trans.name == transformation_name:
+                logger.info(f"  Encontrado en transformations: tipo='{trans.type}'")
+                if trans.type == 'Source Qualifier':
+                    is_sq = True
+                    # Buscar el source que alimenta a este SQ
+                    inputs = self.connection_map.get(transformation_name, [])
+                    logger.info(f"  Inputs del SQ según connection_map: {inputs}")
+
+                    # Listar todos los sources disponibles
+                    source_names = [s.name for s in metadata.sources]
+                    logger.info(f"  Sources disponibles: {source_names}")
+
+                    for input_name in inputs:
+                        logger.info(f"  Verificando input: '{input_name}'")
+                        # Verificar si el input es un source
+                        for source in metadata.sources:
+                            if source.name == input_name:
+                                logger.info(f"  ✓ MATCH! SQ '{transformation_name}' -> Source '{source.name}'")
+                                return source.name
+                            else:
+                                logger.debug(f"    '{input_name}' != '{source.name}'")
+
+                    # Si no encontramos el source, retornar el nombre original
+                    logger.warning(f"  ✗ No se pudo resolver el Source para SQ '{transformation_name}'")
+                    logger.warning(f"  Retornando nombre original: '{transformation_name}'")
+                    return transformation_name
+                break
+
+        # No es un Source Qualifier, retornar el nombre original
+        if not is_sq:
+            logger.info(f"  No es un Source Qualifier, retornando '{transformation_name}'")
+
+        return transformation_name
+
+    def _build_column_case_map(self, sources: List[Source]) -> None:
+        """
+        Construye un mapa de columnas con su casing original para mantener consistencia.
+
+        Args:
+            sources: Lista de sources del mapping
+        """
+        self.column_case_map = {}
+        for source in sources:
+            for field in source.fields:
+                col_name = field.name
+                col_name_lower = col_name.lower()
+                # Guardar el casing original
+                if col_name_lower not in self.column_case_map:
+                    self.column_case_map[col_name_lower] = col_name
+                else:
+                    # Si ya existe pero con diferente casing, generar warning
+                    if self.column_case_map[col_name_lower] != col_name:
+                        warning = (
+                            f"Columna '{col_name}' encontrada con múltiples casings: "
+                            f"'{self.column_case_map[col_name_lower]}' y '{col_name}'. "
+                            f"Usando '{self.column_case_map[col_name_lower]}'."
+                        )
+                        self.warnings.append(warning)
+
+    def _normalize_column_casing(self, expression: str) -> str:
+        """
+        Normaliza el casing de columnas en una expresión para mantener consistencia.
+
+        Args:
+            expression: Expresión con referencias a columnas
+
+        Returns:
+            Expresión con columnas normalizadas al casing original
+        """
+        if not expression:
+            return expression
+
+        # Crear copia de la expresión para modificar
+        normalized_expr = expression
+
+        # Buscar todas las palabras que podrían ser nombres de columnas
+        # (palabras que no son funciones conocidas)
+        import re
+        words = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', expression)
+
+        for word in words:
+            word_lower = word.lower()
+            # Si la palabra está en nuestro mapa de columnas
+            if word_lower in self.column_case_map:
+                correct_casing = self.column_case_map[word_lower]
+                # Si el casing actual es diferente, reemplazar
+                if word != correct_casing:
+                    # Usar word boundary para reemplazos exactos
+                    pattern = r'\b' + re.escape(word) + r'\b'
+                    normalized_expr = re.sub(pattern, correct_casing, normalized_expr)
+
+        return normalized_expr
 
     def translate_source(self, source: Source) -> Dict[str, Any]:
         """Traduce una fuente de PowerCenter a ADF Source"""
@@ -195,10 +351,19 @@ class PowerCenterToADFTranslator:
 
         for field in trans.fields:
             if field.expression:
+                # Normalizar casing de columnas en la expresión
+                normalized_expr = self._normalize_column_casing(field.expression)
+                translated_expr = self.translate_expression(normalized_expr)
+
                 columns.append({
                     'name': field.name,
-                    'expression': self.translate_expression(field.expression)
+                    'expression': translated_expr
                 })
+
+                # Agregar la nueva columna al mapa de casing
+                col_name_lower = field.name.lower()
+                if col_name_lower not in self.column_case_map:
+                    self.column_case_map[col_name_lower] = field.name
 
         return {
             'name': trans.name,
@@ -211,11 +376,14 @@ class PowerCenterToADFTranslator:
         """Traduce Filter a Filter"""
         filter_condition = trans.properties.get('filter_condition', 'true')
 
+        # Normalizar casing de columnas en la condición
+        normalized_condition = self._normalize_column_casing(filter_condition)
+
         return {
             'name': trans.name,
             'type': adf_type,
             'description': trans.description,
-            'condition': self.translate_expression(filter_condition)
+            'condition': self.translate_expression(normalized_condition)
         }
 
     def _translate_aggregator(self, trans: Transformation, adf_type: str) -> Dict[str, Any]:
@@ -235,7 +403,9 @@ class PowerCenterToADFTranslator:
         aggregate_expressions = trans.properties.get('aggregate_expressions', [])
 
         for agg_expr in aggregate_expressions:
-            translated_expr = self.translate_expression(agg_expr['expression'])
+            # Normalizar casing de columnas en la expresión de agregación
+            normalized_expr = self._normalize_column_casing(agg_expr['expression'])
+            translated_expr = self.translate_expression(normalized_expr)
             aggregates.append({
                 'name': agg_expr['name'],
                 'expression': translated_expr
@@ -246,9 +416,11 @@ class PowerCenterToADFTranslator:
             for field in trans.fields:
                 if field.expression and any(agg in field.expression.upper()
                                            for agg in ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'FIRST', 'LAST']):
+                    # Normalizar casing en la expresión
+                    normalized_expr = self._normalize_column_casing(field.expression)
                     aggregates.append({
                         'name': field.name,
-                        'expression': self.translate_expression(field.expression)
+                        'expression': self.translate_expression(normalized_expr)
                     })
 
         result = {
@@ -295,6 +467,59 @@ class PowerCenterToADFTranslator:
         # Parsear join conditions múltiples (separadas por AND)
         join_conditions = self._parse_join_conditions(join_condition)
 
+        # CRÍTICO: Determinar los dos inputs del join desde el connection_map
+        inputs = self.connection_map.get(trans.name, [])
+        left_input = None
+        right_input = None
+
+        logger.info(f"Procesando Joiner '{trans.name}', inputs raw: {inputs}")
+
+        # CRÍTICO: Obtener inputs ÚNICOS (sin duplicados)
+        # En PowerCenter, el connection_map tiene múltiples conexiones por cada campo,
+        # pero para un Join solo nos interesan las 2 fuentes únicas
+        unique_inputs = list(dict.fromkeys(inputs))  # Preserva orden, elimina duplicados
+        logger.info(f"Inputs únicos para Joiner '{trans.name}': {unique_inputs}")
+
+        if len(unique_inputs) >= 2:
+            # El primero suele ser el Master, el segundo el Detail
+            left_input_raw = unique_inputs[0]
+            right_input_raw = unique_inputs[1]
+
+            # CRÍTICO: Resolver Source Qualifiers a sus Sources reales
+            # Esto evita que aparezca "SQ_POLIZAS, SQ_POLIZAS" en lugar de "VENTAS, POLIZAS"
+            left_input = self._resolve_source_qualifier_to_source(left_input_raw, self.metadata)
+            right_input = self._resolve_source_qualifier_to_source(right_input_raw, self.metadata)
+
+            logger.info(f"Joiner '{trans.name}' resuelto: {left_input_raw} -> {left_input}, {right_input_raw} -> {right_input}")
+
+            # VALIDACIÓN CRÍTICA: Detectar si la resolución falló y causó self-join
+            if left_input == right_input and left_input_raw != right_input_raw:
+                error = (
+                    f"ERROR CRÍTICO: Joiner '{trans.name}' tiene inputs diferentes ({left_input_raw} vs {right_input_raw}) "
+                    f"pero ambos se resolvieron al mismo stream: '{left_input}'. Esto causará un self-join erróneo."
+                )
+                logger.error(error)
+                self.errors.append(error)
+                # Intentar usar los nombres raw como fallback
+                if left_input_raw != right_input_raw:
+                    logger.warning(f"Usando nombres raw como fallback: {left_input_raw}, {right_input_raw}")
+                    left_input = left_input_raw
+                    right_input = right_input_raw
+
+        elif len(unique_inputs) == 1:
+            left_input_raw = unique_inputs[0]
+            left_input = self._resolve_source_qualifier_to_source(left_input_raw, self.metadata)
+            right_input = None
+            error = f"ERROR: Joiner '{trans.name}' tiene solo 1 input único conectado: {left_input_raw}. Un Join requiere 2 inputs."
+            logger.error(error)
+            self.errors.append(error)
+        else:
+            error = f"ERROR CRÍTICO: Joiner '{trans.name}' no tiene inputs únicos conectados. Inputs raw: {inputs}"
+            logger.error(error)
+            self.errors.append(error)
+            left_input = None
+            right_input = None
+
         result = {
             'name': trans.name,
             'type': adf_type,
@@ -302,7 +527,9 @@ class PowerCenterToADFTranslator:
             'joinType': adf_join_type,
             'joinConditions': join_conditions,
             'masterFields': master_fields,
-            'detailFields': detail_fields
+            'detailFields': detail_fields,
+            'leftInput': left_input,  # NUEVO: Input real del Master
+            'rightInput': right_input  # NUEVO: Input real del Detail
         }
 
         # Agregar advertencia si sorted input está habilitado
@@ -448,13 +675,89 @@ class PowerCenterToADFTranslator:
         # Parsear lookup conditions
         lookup_conditions = self._parse_join_conditions(lookup_condition)
 
+        # CRÍTICO: Determinar el input principal del Lookup desde el connection_map
+        # Un Lookup tiene dos flujos de entrada:
+        # 1. Pipeline input (main stream) - viene del connection_map
+        # 2. Lookup table - viene de lookup_table property
+        inputs = self.connection_map.get(trans.name, [])
+        unique_inputs = list(dict.fromkeys(inputs))  # Eliminar duplicados
+
+        main_input = None
+        if unique_inputs:
+            # El input principal es el primer (y usualmente único) input único
+            main_input_raw = unique_inputs[0]
+            # Resolver Source Qualifier a Source real
+            main_input = self._resolve_source_qualifier_to_source(main_input_raw, self.metadata)
+            logger.info(f"Lookup '{trans.name}': main_input={main_input_raw} -> {main_input}, lookup_table={lookup_table}")
+
+        # CRÍTICO: Detectar columnas duplicadas y crear mapeo de desambiguación
+        # PowerCenter añade sufijos cuando hay colisión de nombres:
+        #   - Columna SIN sufijo = YA EXISTE en el flujo (de cualquier paso anterior)
+        #   - Columna CON sufijo = NUEVA del LOOKUP actual (para evitar colisión)
+        #
+        # ADF requiere cualificación EXPLÍCITA cuando hay ambigüedad:
+        #   - Columnas CON sufijo: mapear a lookup_table@base_name
+        #   - Columnas SIN sufijo QUE COLISIONAN: mapear a main_input@column
+        #
+        # Ejemplo: lkp_DIM_PROMOTIONS tiene PROMO_ID, PROMO_ID1, PROMO_ID2
+        #   - PROMO_ID (sin sufijo pero colisiona): mapear a main_input@PROMO_ID
+        #   - PROMO_ID1 (con sufijo): mapear a lkp_DIM_DATES@PROMO_ID
+        #   - PROMO_ID2 (con sufijo): mapear a DIM_PROMOTIONS@PROMO_ID
+        column_disambiguation = {}
+
+        # Get return fields (columns from lookup table)
+        return_fields_names = [f['name'] if isinstance(f, dict) else f for f in trans.properties.get('return_fields', [])]
+
+        # Analizar los campos del transformation para detectar renombramientos
+        import re
+
+        # Primero, identificar qué columnas tienen colisiones (tienen sufijos)
+        collision_base_names = set()
+        for field in trans.fields:
+            match = re.match(r'^(.+?)(\d+)$', field.name)
+            if match:
+                collision_base_names.add(match.group(1))
+
+        # Segundo, mapear las columnas
+        for field in trans.fields:
+            field_name = field.name
+
+            # Detectar columnas con sufijos numéricos que indican colisión
+            match = re.match(r'^(.+?)(\d+)$', field_name)
+
+            if match:
+                # Esta columna tiene sufijo (ej: DISCOUNT1, PROMO_ID2)
+                # En PowerCenter, el sufijo indica que es NUEVA y VIENE DEL LOOKUP
+                base_name = match.group(1)  # DISCOUNT, PROMO_ID
+                suffix_num = match.group(2)  # 1, 2, etc.
+
+                # Mapear: DISCOUNT1 → lookup_table@DISCOUNT (viene del lookup)
+                # SOLO si el base_name está en los return_fields del lookup
+                if lookup_table and base_name in return_fields_names:
+                    column_disambiguation[field_name] = f"{lookup_table}@{base_name}"
+                    logger.debug(f"Lookup '{trans.name}': Mapeando {field_name} → {lookup_table}@{base_name} (nuevo campo del lookup)")
+                else:
+                    logger.debug(f"Lookup '{trans.name}': Columna {field_name} tiene sufijo pero no está en return_fields, no se mapea")
+
+            elif field_name in collision_base_names:
+                # Esta columna NO tiene sufijo, PERO existe una versión con sufijo
+                # Esto significa que hay AMBIGÜEDAD y necesita cualificación con main_input
+                if main_input:
+                    column_disambiguation[field_name] = f"{main_input}@{field_name}"
+                    logger.debug(f"Lookup '{trans.name}': Mapeando {field_name} → {main_input}@{field_name} (columna ambigua del stream principal)")
+
+        if column_disambiguation:
+            logger.info(f"Lookup '{trans.name}': Desambiguación de columnas aplicada: {len(column_disambiguation)} mapeos")
+
         result = {
             'name': trans.name,
             'type': adf_type,
             'description': trans.description,
             'lookupDataset': lookup_table,
+            'mainInput': main_input,  # Input principal resuelto
             'lookupConditions': lookup_conditions,
-            'returnFields': return_fields
+            'returnFields': return_fields,
+            'columnDisambiguation': column_disambiguation  # NUEVO: Mapeo de columnas duplicadas
         }
 
         # Configurar cache mode
@@ -530,6 +833,7 @@ class PowerCenterToADFTranslator:
     def translate_expression(self, expression: str) -> str:
         """
         Traduce una expresión de PowerCenter a sintaxis de ADF.
+        Usa el traductor robusto con mapeo completo de funciones.
 
         Args:
             expression: Expresión en sintaxis PowerCenter
@@ -540,19 +844,26 @@ class PowerCenterToADFTranslator:
         if not expression:
             return ''
 
-        translated = expression
+        try:
+            # Usar el traductor robusto con mapeo completo
+            translated = translate_expr_robust(expression)
+            return translated
+        except Exception as e:
+            # Fallback al traductor original si falla el robusto
+            logger.warning(f"Error en traductor robusto, usando fallback: {e}")
 
-        # Traducir funciones
-        for pc_func, adf_func in self.function_mappings.items():
-            # Case insensitive replacement
-            pattern = re.compile(re.escape(pc_func), re.IGNORECASE)
-            translated = pattern.sub(adf_func, translated)
+            translated = expression
 
-        # Traducir operadores específicos
-        translated = translated.replace('||', '+')  # Concatenación
-        translated = translated.replace('!=', '<>')  # Diferente
+            # Traducir funciones (fallback antiguo)
+            for pc_func, adf_func in self.function_mappings.items():
+                # Case insensitive replacement
+                pattern = re.compile(re.escape(pc_func), re.IGNORECASE)
+                translated = pattern.sub(adf_func, translated)
 
-        return translated
+            # Traducir operadores específicos
+            translated = translated.replace('||', 'concat')  # Concatenación
+
+            return translated
 
     def map_datatype(self, pc_datatype: str) -> str:
         """

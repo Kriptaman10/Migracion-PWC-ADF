@@ -180,10 +180,25 @@ class MappingValidator:
         source_type = trans.properties.get('source_type', 'Database')
         sql_override = trans.properties.get('sql_override')
 
-        if not lookup_table and not sql_override:
-            self.errors.append(
-                f"Lookup '{trans.name}' no tiene lookup table ni SQL Override definido"
-            )
+        # CRÍTICO: Solo validar lookup_table para Database lookups, NO para Flat File
+        if source_type == 'Flat File':
+            # Validar configuración de Flat File
+            flat_file_config = trans.properties.get('flat_file')
+            if not flat_file_config:
+                self.warnings.append(
+                    f"Lookup '{trans.name}' usa Flat File pero no tiene configuración de archivo"
+                )
+            else:
+                # Flat File lookup es válido, solo warning informativo
+                self.warnings.append(
+                    f"Lookup '{trans.name}' uses Flat File. Ensure DelimitedText dataset is configured."
+                )
+        else:
+            # Para Database lookups, requerir lookup_table o sql_override
+            if not lookup_table and not sql_override:
+                self.errors.append(
+                    f"Lookup '{trans.name}' no tiene lookup table ni SQL Override definido"
+                )
 
         if not lookup_condition:
             self.warnings.append(
@@ -194,13 +209,6 @@ class MappingValidator:
             self.warnings.append(
                 f"Lookup '{trans.name}' usa SQL Override. Revisar compatibilidad con ADF."
             )
-
-        if source_type == 'Flat File':
-            flat_file_config = trans.properties.get('flat_file')
-            if not flat_file_config:
-                self.warnings.append(
-                    f"Lookup '{trans.name}' usa Flat File pero no tiene configuración de archivo"
-                )
 
     def _validate_router(self, trans: Transformation) -> None:
         """Valida Router Transformation"""

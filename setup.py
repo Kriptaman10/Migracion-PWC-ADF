@@ -10,16 +10,16 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="pc-to-adf",
-    version="1.0.0",
-    author="Practicante Entix",
+    version="2.0.0",
+    author="Benjamín Riquelme - Entix SpA",
     author_email="contacto@entix.cl",
-    description="Herramienta CLI para migrar PowerCenter a Azure Data Factory",
+    description="Herramienta CLI y Web para migrar PowerCenter a Azure Data Factory",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/entix/powercenter-to-adf",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Code Generators",
         "License :: OSI Approved :: MIT License",
